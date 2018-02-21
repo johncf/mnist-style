@@ -26,7 +26,7 @@ class _Part1(nn.HybridBlock):
     def __init__(self, **kwargs):
         super(_Part1, self).__init__(**kwargs)
         with self.name_scope():
-            self.layers = []
+            self._layers = []
             self._add_layer(nn.Conv2D(channels=4, kernel_size=5, activation='relu'))
             self._add_layer(nn.Conv2D(channels=8, kernel_size=3, activation='relu'))
             self._add_layer(nn.MaxPool2D(pool_size=2, strides=2))
@@ -36,11 +36,11 @@ class _Part1(nn.HybridBlock):
             self._add_layer(nn.Flatten())
 
     def _add_layer(self, block):
-        self.layers.append(block)
+        self._layers.append(block)
         self.register_child(block)
 
     def hybrid_forward(self, F, x):
-        for layer in self.layers:
+        for layer in self._layers:
             x = layer(x)
         return x
 

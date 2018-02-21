@@ -5,18 +5,18 @@ class ImgDecoder(nn.HybridBlock):
     def __init__(self, img_size=784, **kwargs):
         super(ImgDecoder, self).__init__(**kwargs)
         with self.name_scope():
-            self.layers = []
+            self._layers = []
             self._add_layer(nn.Dense(64, activation='relu'))
             self._add_layer(nn.Dense(128, activation='relu'))
             self._add_layer(nn.Dense(256, activation='relu'))
             self._add_layer(nn.Dense(img_size, activation='sigmoid'))
 
     def _add_layer(self, block):
-        self.layers.append(block)
+        self._layers.append(block)
         self.register_child(block)
 
     def hybrid_forward(self, F, x):
-        for layer in self.layers:
+        for layer in self._layers:
             x = layer(x)
         return x
 

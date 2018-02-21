@@ -23,8 +23,9 @@ def main():
                         help='learning rate with adam optimizer (default: 0.005)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
                         help='rank of the latent feature vector (default: 8)')
-    parser.add_argument('--param-prefix', default='mnist', metavar='pre',
-                        help='name-prefix of weight files (default: mnist)')
+    parser.add_argument('--state-prefix', default='mnist', metavar='pre',
+                        help='path-prefix of state files (default: mnist) ' +
+                             'state files will be of the form "prefixN.key.params"')
     opt = parser.parse_args()
 
     # network
@@ -46,36 +47,38 @@ def main():
     # computation context
     ctx = mx.cpu()
 
-    # initialize parameters
-    xavinit = mx.init.Xavier(magnitude=2.24)
-    param_paths = get_param_paths(opt.param_prefix)
-    initialize(enc, xavinit, param_paths['enc'], ctx)
-    initialize(dec, xavinit, param_paths['dec'], ctx)
+    save_paths = dict([(key, '{}{}.{}.params'.format(opt.state_prefix, opt.feature_size, key))
+                        for key in ['enc', 'dec', 'enc_tr', 'dec_tr']])
 
     # train
-    train(ctx, enc, dec, train_data, test_data,
+    train(ctx, enc, dec, train_data, test_data, save_paths,
           lr=opt.lr, epochs=opt.epochs)
 
-    # save parameters
-    enc.save_params(param_paths['enc'])
-    dec.save_params(param_paths['dec'])
 
-
-def get_param_paths(path_prefix):
-    return dict([(key, path_prefix + '.' + key + '.params')
-                 for key in ['enc', 'dec']])
-
-
-def initialize(block, initializer, param_file, ctx):
+def init_block(block, initializer, param_file, ctx):
     if os.path.isfile(param_file):
         block.load_params(param_file, ctx)
     else:
         block.initialize(initializer, ctx)
 
 
-def train(ctx, enc, dec, train_data, test_data, lr=0.01, epochs=40):
+def restore_trainer(trainer, state_file):
+    if os.path.isfile(state_file):
+        trainer.load_states(state_file)
+
+
+def train(ctx, enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
+    # initialize parameters
+    xavinit = mx.init.Xavier(magnitude=2.24)
+    init_block(enc, xavinit, save_paths['enc'], ctx)
+    init_block(dec, xavinit, save_paths['dec'], ctx)
+
     enc_trainer = gluon.Trainer(enc.collect_params(), 'adam', {'learning_rate': lr})
     dec_trainer = gluon.Trainer(dec.collect_params(), 'adam', {'learning_rate': lr})
+
+    # try to restore trainer states
+    restore_trainer(enc_trainer, save_paths['enc_tr'])
+    restore_trainer(dec_trainer, save_paths['dec_tr'])
 
     loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
     metric = mx.metric.MSE()
@@ -107,6 +110,12 @@ def train(ctx, enc, dec, train_data, test_data, lr=0.01, epochs=40):
 
         name, test_mse = test(ctx, enc, dec, test_data)
         print('[Epoch %d] Validation: %s=%f'%(epoch+1, name, test_mse))
+
+    # save states and parameters
+    enc.save_params(save_paths['enc'])
+    dec.save_params(save_paths['dec'])
+    enc_trainer.save_states(save_paths['enc_tr'])
+    dec_trainer.save_states(save_paths['dec_tr'])
 
 
 test_idx = 1

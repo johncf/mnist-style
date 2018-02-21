@@ -10,15 +10,15 @@ from mxnet import gluon, autograd
 from mxnet.gluon import nn
 
 
-img_idx = 1
-def save_image(img, imgdir='/tmp/mnist'):
+def save_images(images, imgdir, startid=1, nwidth=6):
     import os
     from PIL import Image
     os.makedirs(imgdir, exist_ok=True)
     global img_idx
-    img = Image.fromarray(img*255)
-    img.convert('L').save(os.path.join(imgdir, str(img_idx).zfill(4) + ".png"))
-    img_idx += 1
+    for img in images:
+        img = Image.fromarray(img*255)
+        img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
+        startid += 1
 
 
 def main():
@@ -102,15 +102,26 @@ def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40, log_i
         print('[Epoch %d] Validation: %s=%f'%(epoch, name, test_mse))
 
 
+test_idx = 1
 def test(ctx, enc1, enc2, dec, test_data):
+    global test_idx
     metric = mx.metric.MSE()
+    images = []
     for data, labels in test_data:
         features = encode(enc1, enc2, data, labels)
         data_out = decode(dec, features, labels)
         metric.update([data], [data_out])
+
         idx = np.random.randint(data.shape[0])
-        img = np.concatenate([data[idx][0].asnumpy(), data_out[idx][0].asnumpy()], axis=1)
-        save_image(img)
+        images.append(mx.nd.concat(data[idx], data_out[idx], dim=2)[0].asnumpy())
+
+    try:
+        imgdir = '/tmp/mnist'
+        save_images(images, imgdir, test_idx*1000)
+        test_idx += 1
+        print(len(images), "test images written to", imgdir)
+    except Exception as e:
+        print("writing images failed:", e)
 
     return metric.get()
 

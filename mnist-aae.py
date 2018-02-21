@@ -3,6 +3,7 @@
 import argparse
 import logging
 logging.basicConfig(level=logging.DEBUG)
+import os
 
 import numpy as np
 import mxnet as mx
@@ -10,17 +11,6 @@ from mxnet import gluon, autograd
 
 from encoder import ImgEncoderPart1, ImgEncoderPart2, encode
 from decoder import ImgDecoder, decode
-
-
-def save_images(images, imgdir, startid=1, nwidth=6):
-    import os
-    from PIL import Image
-    os.makedirs(imgdir, exist_ok=True)
-    global img_idx
-    for img in images:
-        img = Image.fromarray(img*255)
-        img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
-        startid += 1
 
 
 def main():
@@ -54,21 +44,46 @@ def main():
         gluon.data.vision.MNIST('./data', train=False, transform=transformer),
         batch_size=opt.batch_size, shuffle=False)
 
-    # train
+    # computation context
     ctx = mx.cpu()
+
+    # initialize parameters
+    xavinit = mx.init.Xavier(magnitude=2.24)
+    param_files = get_param_files(opt.param_prefix)
+    initialize(enc1, xavinit, param_files['enc1'], ctx)
+    initialize(enc2, xavinit, param_files['enc2'], ctx)
+    initialize(dec, xavinit, param_files['dec'], ctx)
+
+    # train
     train(ctx, enc1, enc2, dec, train_data, test_data,
           lr=opt.lr, epochs=opt.epochs)
 
-    enc1.save_params(opt.param_prefix + '.enc1.params')
-    enc2.save_params(opt.param_prefix + '.enc2.params')
-    dec.save_params(opt.param_prefix + '.dec.params')
+    # save parameters
+    enc1.save_params(param_files['enc1'])
+    enc2.save_params(param_files['enc2'])
+    dec.save_params(param_files['dec'])
+
+
+def get_param_files(path_prefix):
+    return dict([(key, path_prefix + '.' + key + '.params')
+                 for key in ['enc1', 'enc2', 'dec']])
+
+
+def initialize(block, initializer, param_file, ctx):
+    if os.path.isfile(param_file):
+        block.load_params(param_file, ctx)
+    else:
+        block.initialize(initializer, ctx)
+
+
+def save_params(enc1, enc2, dec, path_prefix):
+    param_files = get_param_files(path_prefix)
+    enc1.save_params(param_files['enc1'])
+    enc2.save_params(param_files['enc2'])
+    dec.save_params(param_files['dec'])
 
 
 def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40):
-    enc1.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
-    enc2.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
-    dec.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
-
     enc1_trainer = gluon.Trainer(enc1.collect_params(), 'adam', {'learning_rate': lr})
     enc2_trainer = gluon.Trainer(enc2.collect_params(), 'adam', {'learning_rate': lr})
     dec_trainer = gluon.Trainer(dec.collect_params(), 'adam', {'learning_rate': lr})
@@ -128,6 +143,15 @@ def test(ctx, enc1, enc2, dec, test_data):
         print("writing images failed:", e)
 
     return metric.get()
+
+
+def save_images(images, imgdir, startid=1, nwidth=6):
+    from PIL import Image
+    os.makedirs(imgdir, exist_ok=True)
+    for img in images:
+        img = Image.fromarray(img*255)
+        img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
+        startid += 1
 
 
 if __name__ == '__main__':

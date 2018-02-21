@@ -22,20 +22,22 @@ def save_images(images, imgdir, startid=1, nwidth=6):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='MXNet Gluon MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=100,
+    parser = argparse.ArgumentParser(description='MXNet Gluon MNIST Autoencoder')
+    parser.add_argument('--batch-size', type=int, default=100, metavar='B',
                         help='batch size for training and testing (default: 100)')
-    parser.add_argument('--epochs', type=int, default=5,
+    parser.add_argument('--epochs', type=int, default=5, metavar='E',
                         help='number of epochs to train (default: 5)')
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
-                        help='how many batches to wait before logging training status')
+    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
+                        help='rank of the latent feature vector (default: 8)')
+    parser.add_argument('--param-prefix', default='mnist', metavar='pre',
+                        help='name-prefix of weight files (default: mnist)')
     opt = parser.parse_args()
 
     # network
     enc1 = ImgEncoderPart1()
-    enc2 = ImgEncoderPart2()
+    enc2 = ImgEncoderPart2(opt.feature_size)
     dec = ImgDecoder()
 
     # data
@@ -53,14 +55,14 @@ def main():
     # train
     ctx = mx.cpu()
     train(ctx, enc1, enc2, dec, train_data, test_data,
-          lr=opt.lr, epochs=opt.epochs, log_iv=opt.log_interval)
+          lr=opt.lr, epochs=opt.epochs)
 
-    enc1.save_params('mnist_enc1.params')
-    enc2.save_params('mnist_enc2.params')
-    dec.save_params('mnist_dec.params')
+    enc1.save_params(opt.param_prefix + '.enc1.params')
+    enc2.save_params(opt.param_prefix + '.enc2.params')
+    dec.save_params(opt.param_prefix + '.dec.params')
 
 
-def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40, log_iv=100):
+def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40):
     enc1.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
     enc2.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
     dec.initialize(mx.init.Xavier(magnitude=2.24), ctx=ctx)
@@ -91,7 +93,7 @@ def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40, log_i
 
             metric.update([data], [data_out])
 
-            if (i+1) % log_iv == 0:
+            if (i+1) % 100 == 0:
                 name, mse = metric.get()
                 print('[Epoch %d Batch %d] Training: %s=%f'%(epoch, i+1, name, mse))
 

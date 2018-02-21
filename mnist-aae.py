@@ -9,7 +9,7 @@ import numpy as np
 import mxnet as mx
 from mxnet import gluon, autograd
 
-from encoder import ImgEncoderPart1, ImgEncoderPart2, encode
+from encoder import ImgEncoder, encode
 from decoder import ImgDecoder, decode
 
 
@@ -28,8 +28,7 @@ def main():
     opt = parser.parse_args()
 
     # network
-    enc1 = ImgEncoderPart1()
-    enc2 = ImgEncoderPart2(opt.feature_size)
+    enc = ImgEncoder(opt.feature_size)
     dec = ImgDecoder()
 
     # data
@@ -49,24 +48,22 @@ def main():
 
     # initialize parameters
     xavinit = mx.init.Xavier(magnitude=2.24)
-    param_files = get_param_files(opt.param_prefix)
-    initialize(enc1, xavinit, param_files['enc1'], ctx)
-    initialize(enc2, xavinit, param_files['enc2'], ctx)
-    initialize(dec, xavinit, param_files['dec'], ctx)
+    param_paths = get_param_paths(opt.param_prefix)
+    initialize(enc, xavinit, param_paths['enc'], ctx)
+    initialize(dec, xavinit, param_paths['dec'], ctx)
 
     # train
-    train(ctx, enc1, enc2, dec, train_data, test_data,
+    train(ctx, enc, dec, train_data, test_data,
           lr=opt.lr, epochs=opt.epochs)
 
     # save parameters
-    enc1.save_params(param_files['enc1'])
-    enc2.save_params(param_files['enc2'])
-    dec.save_params(param_files['dec'])
+    enc.save_params(param_paths['enc'])
+    dec.save_params(param_paths['dec'])
 
 
-def get_param_files(path_prefix):
+def get_param_paths(path_prefix):
     return dict([(key, path_prefix + '.' + key + '.params')
-                 for key in ['enc1', 'enc2', 'dec']])
+                 for key in ['enc', 'dec']])
 
 
 def initialize(block, initializer, param_file, ctx):
@@ -76,16 +73,8 @@ def initialize(block, initializer, param_file, ctx):
         block.initialize(initializer, ctx)
 
 
-def save_params(enc1, enc2, dec, path_prefix):
-    param_files = get_param_files(path_prefix)
-    enc1.save_params(param_files['enc1'])
-    enc2.save_params(param_files['enc2'])
-    dec.save_params(param_files['dec'])
-
-
-def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40):
-    enc1_trainer = gluon.Trainer(enc1.collect_params(), 'adam', {'learning_rate': lr})
-    enc2_trainer = gluon.Trainer(enc2.collect_params(), 'adam', {'learning_rate': lr})
+def train(ctx, enc, dec, train_data, test_data, lr=0.01, epochs=40):
+    enc_trainer = gluon.Trainer(enc.collect_params(), 'adam', {'learning_rate': lr})
     dec_trainer = gluon.Trainer(dec.collect_params(), 'adam', {'learning_rate': lr})
 
     loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
@@ -98,36 +87,35 @@ def train(ctx, enc1, enc2, dec, train_data, test_data, lr=0.01, epochs=40):
             labels = labels.as_in_context(ctx)
             # record computation graph for differentiating with backward()
             with autograd.record():
-                features = encode(enc1, enc2, data, labels)
+                features = encode(enc, data, labels)
                 data_out = decode(dec, features, labels)
                 L = loss(data_out, data)
                 L.backward()
             # weights train step
             batch_size = data.shape[0]
-            enc1_trainer.step(batch_size)
-            enc2_trainer.step(batch_size)
+            enc_trainer.step(batch_size)
             dec_trainer.step(batch_size)
 
             metric.update([data], [data_out])
 
             if (i+1) % 100 == 0:
                 name, mse = metric.get()
-                print('[Epoch %d Batch %d] Training: %s=%f'%(epoch, i+1, name, mse))
+                print('[Epoch %d Batch %d] Training: %s=%f'%(epoch+1, i+1, name, mse))
 
         name, mse = metric.get()
-        print('[Epoch %d] Training: %s=%f'%(epoch, name, mse))
+        print('[Epoch %d] Training: %s=%f'%(epoch+1, name, mse))
 
-        name, test_mse = test(ctx, enc1, enc2, dec, test_data)
-        print('[Epoch %d] Validation: %s=%f'%(epoch, name, test_mse))
+        name, test_mse = test(ctx, enc, dec, test_data)
+        print('[Epoch %d] Validation: %s=%f'%(epoch+1, name, test_mse))
 
 
 test_idx = 1
-def test(ctx, enc1, enc2, dec, test_data):
+def test(ctx, enc, dec, test_data):
     global test_idx
     metric = mx.metric.MSE()
     images = []
     for data, labels in test_data:
-        features = encode(enc1, enc2, data, labels)
+        features = encode(enc, data, labels)
         data_out = decode(dec, features, labels)
         metric.update([data], [data_out])
 

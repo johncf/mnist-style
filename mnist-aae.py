@@ -133,22 +133,22 @@ def test(ctx, enc, dec, test_data):
 
     try:
         imgdir = '/tmp/mnist'
-        save_images(images, imgdir, test_idx*1000)
+        save_images(images[::2], imgdir, test_idx*1000)
         test_idx += 1
-        print(len(images), "test images written to", imgdir)
     except Exception as e:
         print("writing images failed:", e)
 
     return metric.get()
 
 
-def save_images(images, imgdir, startid=1, nwidth=6):
+def save_images(images, imgdir, startid=1, nwidth=5):
     from PIL import Image
     os.makedirs(imgdir, exist_ok=True)
     for img in images:
         img = Image.fromarray(img*255)
         img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
         startid += 1
+    print(len(images), "test images written to", imgdir)
 
 
 if __name__ == '__main__':

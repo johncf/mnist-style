@@ -3,14 +3,14 @@
 ## Roadmap
 
 - [x] Simple auto-encoder
-- [ ] A script to visualize latent feature-space.
+- [x] A script to visualize latent feature-space.
 - [ ] Adverserial auto-encoder for the feature-space to have a gaussian distribution.
 
 ## Setup
 
 ```
 $ python3 -m venv pyenv
-$ . pyenv/bin/activate
+$ source pyenv/bin/activate
 $ pip3 install -r requirements.txt
 ```
 
@@ -69,8 +69,8 @@ $ pip install -r vis-requirements.txt
 ```
 
 Executing the following script creates an encoder model with saved parameters,
-runs the it on 500 test images (by default), and displays the feature space as
-a scatter matrix.
+runs it on 500 test images (by default), and displays the feature space as a
+scatter matrix.
 
 ```
 $ ./encoder-vis.py --feature-size 4

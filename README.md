@@ -4,7 +4,7 @@
 
 - [x] Simple auto-encoder
 - [x] A script to visualize latent feature-space.
-- [ ] Adverserial auto-encoder for the feature-space to have a gaussian distribution.
+- [x] Adverserial auto-encoder for the feature-space to have a gaussian distribution.
 
 ## Setup
 

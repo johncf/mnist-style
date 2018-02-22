@@ -53,3 +53,29 @@ $ ./mnist-aae.py --feature-size 4
 50 test images written to /tmp/mnist
 [Epoch 5] Validation: mse=0.024895
 ```
+
+## Feature Space Visualisation
+
+If you're interested in visualizing the feature space which your trained
+encoder maps to, there's a script to do just that.
+
+For that, we first need to install the visualisation requirements. Note that
+PyQt5 is listed in it, which you may skip if you manually replace `plt.show()`
+with `plt.savefig('plot.svg')` as well as remove `mpl.use('PyQt5Agg')` right
+after `import matplotlib`.
+
+```
+$ pip install -r vis-requirements.txt
+```
+
+Executing the following script creates an encoder model with saved parameters,
+runs the it on 500 test images (by default), and displays the feature space as
+a scatter matrix.
+
+```
+$ ./encoder-vis.py --feature-size 4
+```
+
+[![vis-sample](https://i.imgur.com/6IN5FDkl.png)](https://i.imgur.com/6IN5FDk.png)
+
+_(click to enlarge)_

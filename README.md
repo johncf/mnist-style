@@ -34,24 +34,22 @@ optional arguments:
 ```
 
 ```
-$ ./mnist-aae.py --feature-size 4 --epochs 2
+$ ./mnist-aae.py --feature-size 4
 ... ignore warnings that show up here ...
-[Epoch 1 Batch 100] Training: mse=0.023652
-[Epoch 1 Batch 200] Training: mse=0.023718
-[Epoch 1 Batch 300] Training: mse=0.023698
-[Epoch 1 Batch 400] Training: mse=0.023704
-[Epoch 1 Batch 500] Training: mse=0.023715
-[Epoch 1 Batch 600] Training: mse=0.023761
-[Epoch 1] Training: mse=0.023761
+[Epoch 1 Batch 100] Training: mse=0.070375
+[Epoch 1 Batch 200] Training: mse=0.058631
+[Epoch 1 Batch 300] Training: mse=0.052309
+[Epoch 1 Batch 400] Training: mse=0.048182
+[Epoch 1 Batch 500] Training: mse=0.045372
+[Epoch 1 Batch 600] Training: mse=0.043215
+[Epoch 1] Training: mse=0.043215
 50 test images written to /tmp/mnist
-[Epoch 1] Validation: mse=0.023958
-[Epoch 2 Batch 100] Training: mse=0.023553
-[Epoch 2 Batch 200] Training: mse=0.023681
-[Epoch 2 Batch 300] Training: mse=0.023674
-[Epoch 2 Batch 400] Training: mse=0.023656
-[Epoch 2 Batch 500] Training: mse=0.023677
-[Epoch 2 Batch 600] Training: mse=0.023669
-[Epoch 2] Training: mse=0.023669
+[Epoch 1] Validation: mse=0.032171
+[Epoch 2 Batch 100] Training: mse=0.031460
+... output redacted for brevity ...
+[Epoch 5 Batch 500] Training: mse=0.025346
+[Epoch 5 Batch 600] Training: mse=0.025322
+[Epoch 5] Training: mse=0.025322
 50 test images written to /tmp/mnist
-[Epoch 2] Validation: mse=0.023812
+[Epoch 5] Validation: mse=0.024895
 ```

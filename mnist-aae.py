@@ -11,6 +11,7 @@ from mxnet import gluon, autograd
 
 from encoder import ImgEncoder, encode
 from decoder import ImgDecoder, decode
+from util import restore_block, save_images
 
 
 def main():
@@ -28,10 +29,6 @@ def main():
                              'state files will be of the form "prefixN.key.params"')
     opt = parser.parse_args()
 
-    # network
-    enc = ImgEncoder(opt.feature_size)
-    dec = ImgDecoder()
-
     # data
     def transformer(data, label):
         data = data.reshape((1,28,28)).astype(np.float32)/255
@@ -44,30 +41,21 @@ def main():
         gluon.data.vision.MNIST('./data', train=False, transform=transformer),
         batch_size=opt.batch_size, shuffle=False)
 
-    # computation context
-    ctx = mx.cpu()
+    # network
+    enc = ImgEncoder(opt.feature_size)
+    dec = ImgDecoder()
 
     save_paths = dict([(key, '{}{}.{}.params'.format(opt.state_prefix, opt.feature_size, key))
                         for key in ['enc', 'dec', 'enc_tr', 'dec_tr']])
 
-    # train
-    train(ctx, enc, dec, train_data, test_data, save_paths,
+    train(enc, dec, train_data, test_data, save_paths,
           lr=opt.lr, epochs=opt.epochs)
 
 
-def init_block(block, initializer, param_file, ctx):
-    if os.path.isfile(param_file):
-        block.load_params(param_file, ctx)
-    else:
-        block.initialize(initializer, ctx)
+def train(enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
+    # computation context
+    ctx = mx.cpu()
 
-
-def restore_trainer(trainer, state_file):
-    if os.path.isfile(state_file):
-        trainer.load_states(state_file)
-
-
-def train(ctx, enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
     # initialize parameters
     xavinit = mx.init.Xavier(magnitude=2.24)
     init_block(enc, xavinit, save_paths['enc'], ctx)
@@ -106,16 +94,29 @@ def train(ctx, enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
                 print('[Epoch %d Batch %d] Training: %s=%f'%(epoch+1, i+1, name, mse))
 
         name, mse = metric.get()
-        print('[Epoch %d] Training: %s=%f'%(epoch+1, name, mse))
+        print('[Epoch {}] Training: {}={}'.format(epoch+1, name, mse))
 
         name, test_mse = test(ctx, enc, dec, test_data)
-        print('[Epoch %d] Validation: %s=%f'%(epoch+1, name, test_mse))
+        print('[Epoch {}] Validation: {}={}'.format(epoch+1, name, test_mse))
 
-    # save states and parameters
-    enc.save_params(save_paths['enc'])
-    dec.save_params(save_paths['dec'])
-    enc_trainer.save_states(save_paths['enc_tr'])
-    dec_trainer.save_states(save_paths['dec_tr'])
+        # save states and parameters
+        enc.save_params(save_paths['enc'])
+        dec.save_params(save_paths['dec'])
+        enc_trainer.save_states(save_paths['enc_tr'])
+        dec_trainer.save_states(save_paths['dec_tr'])
+        print('Model parameters and trainer state saved to:')
+        print('  {}  {}\n  {}  {}'.format(save_paths['enc'], save_paths['enc_tr'],
+                                          save_paths['dec'], save_paths['dec_tr']))
+
+
+def init_block(block, initializer, param_file, ctx):
+    if not restore_block(block, param_file, ctx):
+        block.initialize(initializer, ctx)
+
+
+def restore_trainer(trainer, state_file):
+    if os.path.isfile(state_file):
+        trainer.load_states(state_file)
 
 
 test_idx = 1
@@ -139,16 +140,6 @@ def test(ctx, enc, dec, test_data):
         print("writing images failed:", e)
 
     return metric.get()
-
-
-def save_images(images, imgdir, startid=1, nwidth=5):
-    from PIL import Image
-    os.makedirs(imgdir, exist_ok=True)
-    for img in images:
-        img = Image.fromarray(img*255)
-        img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
-        startid += 1
-    print(len(images), "test images written to", imgdir)
 
 
 if __name__ == '__main__':

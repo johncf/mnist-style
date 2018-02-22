@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--sample-size', type=int, default=500, metavar='S',
                         help='sample size for plotting (default: 500)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='rank of the latent feature vector (default: 8)')
+                        help='dimensions of the latent feature vector (default: 8)')
     parser.add_argument('--state-prefix', default='mnist', metavar='pre',
                         help='path-prefix of state files (default: mnist) ' +
                              'state files will be of the form "prefixN.key.params"')

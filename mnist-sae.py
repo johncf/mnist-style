@@ -15,7 +15,7 @@ from util import restore_block, save_images
 
 
 def main():
-    parser = argparse.ArgumentParser(description='MXNet Gluon MNIST Autoencoder')
+    parser = argparse.ArgumentParser(description='MNIST Simple Auto-Encoder')
     parser.add_argument('--batch-size', type=int, default=100, metavar='B',
                         help='batch size for training and testing (default: 100)')
     parser.add_argument('--epochs', type=int, default=5, metavar='E',
@@ -23,16 +23,16 @@ def main():
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='rank of the latent feature vector (default: 8)')
+                        help='dimensions of the latent feature vector (default: 8)')
     parser.add_argument('--state-prefix', default='mnist', metavar='pre',
                         help='path-prefix of state files (default: mnist) ' +
                              'state files will be of the form "prefixN.key.params"')
     opt = parser.parse_args()
 
     # data
-    def transformer(data, label):
-        data = data.reshape((1,28,28)).astype(np.float32)/255
-        return data, mx.nd.one_hot(mx.nd.array([label]), 10)[0]
+    def transformer(image, label):
+        image = image.reshape((1,28,28)).astype(np.float32)/255
+        return image, mx.nd.one_hot(mx.nd.array([label]), 10)[0]
 
     train_data = gluon.data.DataLoader(
         gluon.data.vision.MNIST('./data', train=True, transform=transformer),
@@ -73,31 +73,31 @@ def train(enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
 
     for epoch in range(epochs):
         metric.reset()
-        for i, (data, labels) in enumerate(train_data):
-            data = data.as_in_context(ctx)
+        for i, (images, labels) in enumerate(train_data):
+            images = images.as_in_context(ctx)
             labels = labels.as_in_context(ctx)
             # record computation graph for differentiating with backward()
             with autograd.record():
-                features = encode(enc, data, labels)
-                data_out = decode(dec, features, labels)
-                L = loss(data_out, data)
+                features = encode(enc, images, labels)
+                images_out = decode(dec, features, labels)
+                L = loss(images_out, images)
                 L.backward()
             # weights train step
-            batch_size = data.shape[0]
+            batch_size = images.shape[0]
             enc_trainer.step(batch_size)
             dec_trainer.step(batch_size)
 
-            metric.update([data], [data_out])
+            metric.update([images], [images_out])
 
             if (i+1) % 100 == 0:
                 name, mse = metric.get()
-                print('[Epoch %d Batch %d] Training: %s=%f'%(epoch+1, i+1, name, mse))
+                print('[Epoch {} Batch {}] Training: {}={:.4f}'.format(epoch+1, i+1, name, mse))
 
         name, mse = metric.get()
-        print('[Epoch {}] Training: {}={}'.format(epoch+1, name, mse))
+        print('[Epoch {}] Training: {}={:.4f}'.format(epoch+1, name, mse))
 
         name, test_mse = test(ctx, enc, dec, test_data)
-        print('[Epoch {}] Validation: {}={}'.format(epoch+1, name, test_mse))
+        print('[Epoch {}] Validation: {}={:.4f}'.format(epoch+1, name, test_mse))
 
         # save states and parameters
         enc.save_params(save_paths['enc'])
@@ -123,18 +123,18 @@ test_idx = 1
 def test(ctx, enc, dec, test_data):
     global test_idx
     metric = mx.metric.MSE()
-    images = []
-    for data, labels in test_data:
-        features = encode(enc, data, labels)
-        data_out = decode(dec, features, labels)
-        metric.update([data], [data_out])
+    samples = []
+    for images, labels in test_data:
+        features = encode(enc, images, labels)
+        images_out = decode(dec, features, labels)
+        metric.update([images], [images_out])
 
-        idx = np.random.randint(data.shape[0])
-        images.append(mx.nd.concat(data[idx], data_out[idx], dim=2)[0].asnumpy())
+        idx = np.random.randint(images.shape[0])
+        samples.append(mx.nd.concat(images[idx], images_out[idx], dim=2)[0].asnumpy())
 
     try:
         imgdir = '/tmp/mnist'
-        save_images(images[::2], imgdir, test_idx*1000)
+        save_images(samples[::2], imgdir, test_idx*1000)
         test_idx += 1
     except Exception as e:
         print("writing images failed:", e)

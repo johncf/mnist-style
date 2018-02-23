@@ -1,10 +1,10 @@
-# MNIST Auto-Encoder
+# MNIST Style-based Auto-Encoder
 
 ## Roadmap
 
 - [x] Simple auto-encoder
-- [x] A script to visualize latent feature-space.
-- [x] Adverserial auto-encoder for the feature-space to have a gaussian distribution.
+- [x] A script to visualize latent feature-space (style-space).
+- [x] Adverserial auto-encoder to fit the style-space into a gaussian distribution.
 
 ## Setup
 
@@ -34,24 +34,43 @@ optional arguments:
 ```
 
 ```
-$ ./mnist-sae.py --feature-size 4
+$ ./mnist-aae.py --feature-size 4
 ... ignore warnings that show up here ...
-[Epoch 1 Batch 100] Training: mse=0.070375
-[Epoch 1 Batch 200] Training: mse=0.058631
-[Epoch 1 Batch 300] Training: mse=0.052309
-[Epoch 1 Batch 400] Training: mse=0.048182
-[Epoch 1 Batch 500] Training: mse=0.045372
-[Epoch 1 Batch 600] Training: mse=0.043215
-[Epoch 1] Training: mse=0.043215
-50 test images written to /tmp/mnist
-[Epoch 1] Validation: mse=0.032171
-[Epoch 2 Batch 100] Training: mse=0.031460
+[Epoch 1 Batch 100] Training: mse=0.0671
+[Epoch 1 Batch 200] Training: mse=0.0572
+[Epoch 1 Batch 300] Training: mse=0.0510
+[Epoch 1 Batch 400] Training: mse=0.0468
+[Epoch 1 Batch 500] Training: mse=0.0440
+[Epoch 1 Batch 600] Training: mse=0.0419
+[Epoch 1] Training:
+  AutoEncoder: mse=0.0419
+  GaussDiscriminator: actual gauss detection accuracy=0.8523
+  GaussDiscriminator: feature space detection accuracy=0.9687
+[Epoch 1] Validation:
+  AutoEncoder: mse=0.0300
+  GaussDiscriminator: feature space satisfaction accuracy=0.0484
+  test images written to /tmp/mnist
+Model parameters and trainer state saved to:
+  mnist4.enc.params  mnist4.enc_tr.params
+  mnist4.dec.params  mnist4.dec_tr.params
+  mnist4.gdc.params  mnist4.gdc_tr.params
+[Epoch 2 Batch 100] Training: mse=0.0303
+[Epoch 2 Batch 200] Training: mse=0.0300
 ... output redacted for brevity ...
-[Epoch 5 Batch 500] Training: mse=0.025346
-[Epoch 5 Batch 600] Training: mse=0.025322
-[Epoch 5] Training: mse=0.025322
-50 test images written to /tmp/mnist
-[Epoch 5] Validation: mse=0.024895
+[Epoch 24 Batch 500] Training: mse=0.0231
+[Epoch 24 Batch 600] Training: mse=0.0231
+[Epoch 24] Training:
+  AutoEncoder: mse=0.0231
+  GaussDiscriminator: actual gauss detection accuracy=0.3636
+  GaussDiscriminator: feature space detection accuracy=0.6523
+[Epoch 24] Validation:
+  AutoEncoder: mse=0.0235
+  GaussDiscriminator: feature space satisfaction accuracy=0.1660
+  test images written to /tmp/mnist
+Model parameters and trainer state saved to:
+  mnist4.enc.params  mnist4.enc_tr.params
+  mnist4.dec.params  mnist4.dec_tr.params
+  mnist4.gdc.params  mnist4.gdc_tr.params
 ```
 
 ## Feature Space Visualisation
@@ -76,6 +95,16 @@ scatter matrix.
 $ ./encoder-vis.py --feature-size 4
 ```
 
-[![vis-sample](https://i.imgur.com/6IN5FDkl.png)](https://i.imgur.com/6IN5FDk.png)
+The following image is the output from an auto-encoder model that was trained
+with the simple approach ([`mnist-sae.py`](./mnist-sae.py)).
+
+[![sae-sample](https://i.imgur.com/fBaF6tcl.png)](https://i.imgur.com/fBaF6tc.png)
+
+_(click to enlarge)_
+
+And below is the same from an adverserially trained auto-encoder model
+([`mnist-aae.py`](./mnist-aae.py)).
+
+[![aae-sample](https://i.imgur.com/pI3iQyBl.png)](https://i.imgur.com/pI3iQyB.png)
 
 _(click to enlarge)_

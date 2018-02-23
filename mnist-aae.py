@@ -19,12 +19,12 @@ def main():
     parser = argparse.ArgumentParser(description='MNIST Adverserial Auto-Encoder')
     parser.add_argument('--batch-size', type=int, default=100, metavar='B',
                         help='batch size for training and testing (default: 100)')
-    parser.add_argument('--epochs', type=int, default=5, metavar='E',
-                        help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=24, metavar='E',
+                        help='number of epochs to train (default: 24)')
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='dimensions of the latent feature vector (default: 8)')
+                        help='dimensions of the latent feature vector (default: 4)')
     parser.add_argument('--state-prefix', default='mnist', metavar='pre',
                         help='path-prefix of state files (default: mnist) ' +
                              'state files will be of the form "prefixN.key.params"')
@@ -106,7 +106,7 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
                 loss_gauss = gd_loss(gauss_fit, gauss_yes)
                 if epoch == 0: # too early to teach gauss
                     L = loss_dec
-                elif epoch < 16:
+                elif epoch < 12:
                     L = loss_dec + loss_gauss/120
                 else: # ready for aggressive immersion!
                     L = loss_dec + loss_gauss/20
@@ -139,9 +139,9 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
         print('[Epoch {}] Training:'.format(epoch+1))
         print('  AutoEncoder: {}={:.4f}'.format(name, mse))
         name, mse = gd_metric_real.get()
-        print('  GaussDiscriminator: actual gauss {}={:.4f}'.format(name, mse))
+        print('  GaussDiscriminator: actual gauss detection {}={:.4f}'.format(name, mse))
         name, mse = gd_metric_fake.get()
-        print('  GaussDiscriminator: feature space {}={:.4f}'.format(name, mse))
+        print('  GaussDiscriminator: feature space detection {}={:.4f}'.format(name, mse))
 
         print('[Epoch {}] Validation:'.format(epoch+1))
         test(ctx, enc, dec, gdc, test_data)
@@ -191,7 +191,7 @@ def test(ctx, enc, dec, gdc, test_data):
     name, mse = ae_metric.get()
     print('  AutoEncoder: {}={:.4f}'.format(name, mse))
     name, mse = gd_metric.get()
-    print('  GaussDiscriminator: {}={:.4f}'.format(name, mse))
+    print('  GaussDiscriminator: feature space satisfaction {}={:.4f}'.format(name, mse))
 
     try:
         imgdir = '/tmp/mnist'

@@ -5,6 +5,7 @@
 - [x] Simple auto-encoder
 - [x] A script to visualize latent feature-space (style-space).
 - [x] Adverserial auto-encoder to fit the style-space into a gaussian distribution.
+- [ ] A script to generate images of all digits from a random style-vector.
 
 ## Setup
 
@@ -19,18 +20,18 @@ $ pip3 install -r requirements.txt
 ```
 $ ./mnist-sae.py --help
 usage: mnist-sae.py [-h] [--batch-size B] [--epochs E] [--lr LR]
-                    [--feature-size N] [--state-prefix pre]
+                    [--feature-size N] [--ckpt-dir ckpt]
 
 MNIST Simple Auto-Encoder
 
 optional arguments:
-  -h, --help          show this help message and exit
-  --batch-size B      batch size for training and testing (default: 100)
-  --epochs E          number of epochs to train (default: 5)
-  --lr LR             learning rate with adam optimizer (default: 0.005)
-  --feature-size N    dimensions of the latent feature vector (default: 8)
-  --state-prefix pre  path-prefix of state files (default: mnist) state files
-                      will be of the form "prefixN.key.params"
+  -h, --help        show this help message and exit
+  --batch-size B    batch size for training and testing (default: 100)
+  --epochs E        number of epochs to train (default: 5)
+  --lr LR           learning rate with adam optimizer (default: 0.005)
+  --feature-size N  dimensions of the latent feature vector (default: 8)
+  --ckpt-dir ckpt   training session directory (default: mnistNs.ckpt) for
+                    storing model parameters and trainer states
 ```
 
 ```
@@ -50,10 +51,7 @@ $ ./mnist-aae.py --feature-size 4
   AutoEncoder: mse=0.0300
   GaussDiscriminator: feature space satisfaction accuracy=0.0484
   test images written to /tmp/mnist
-Model parameters and trainer state saved to:
-  mnist4.enc.params  mnist4.enc_tr.params
-  mnist4.dec.params  mnist4.dec_tr.params
-  mnist4.gdc.params  mnist4.gdc_tr.params
+Model parameters and trainer state saved.
 [Epoch 2 Batch 100] Training: mse=0.0303
 [Epoch 2 Batch 200] Training: mse=0.0300
 ... output redacted for brevity ...
@@ -67,10 +65,7 @@ Model parameters and trainer state saved to:
   AutoEncoder: mse=0.0235
   GaussDiscriminator: feature space satisfaction accuracy=0.1660
   test images written to /tmp/mnist
-Model parameters and trainer state saved to:
-  mnist4.enc.params  mnist4.enc_tr.params
-  mnist4.dec.params  mnist4.dec_tr.params
-  mnist4.gdc.params  mnist4.gdc_tr.params
+Model parameters and trainer state saved.
 ```
 
 ## Feature Space Visualisation

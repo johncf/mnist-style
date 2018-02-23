@@ -1,6 +1,7 @@
 #!/bin/env python3
 
 import argparse
+import os
 
 import numpy as np
 import mxnet as mx
@@ -20,10 +21,12 @@ def main():
                         help='sample size for plotting (default: 500)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
                         help='dimensions of the latent feature vector (default: 8)')
-    parser.add_argument('--state-prefix', default='mnist', metavar='pre',
-                        help='path-prefix of state files (default: mnist) ' +
-                             'state files will be of the form "prefixN.key.params"')
+    parser.add_argument('--ckpt-dir', default=None, metavar='ckpt',
+                        help='training session directory (default: mnistN.ckpt)')
     opt = parser.parse_args()
+
+    ckpt_dir = opt.ckpt_dir if opt.ckpt_dir is not None \
+                            else 'mnist{}.ckpt'.format(opt.feature_size)
 
     def transformer(data, label):
         data = data.reshape((1,28,28)).astype(np.float32)/255
@@ -33,10 +36,10 @@ def main():
         gluon.data.vision.MNIST('./data', train=False, transform=transformer),
         batch_size=opt.sample_size, shuffle=True)
 
-    enc = ImgEncoder(opt.feature_size)
-    param_file = '{}{}.enc.params'.format(opt.state_prefix, opt.feature_size)
-
     ctx = mx.cpu()
+
+    enc = ImgEncoder(opt.feature_size)
+    param_file = os.path.join(ckpt_dir, 'enc.params')
 
     if not restore_block(enc, param_file, ctx):
         raise FileNotFoundError("parameter file {} not found".format(param_file))

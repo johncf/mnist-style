@@ -41,7 +41,7 @@ def main():
     test_data = gluon.data.DataLoader(
         gluon.data.vision.MNIST('./data', train=False, transform=transformer),
         batch_size=opt.batch_size, shuffle=False)
-    gauss_data = GaussSampler(opt.feature_size, batch_size=opt.batch_size, variance=1.6)
+    gauss_data = GaussSampler(opt.feature_size, batch_size=opt.batch_size, variance=2)
 
     # network
     enc = ImgEncoder(opt.feature_size)
@@ -102,7 +102,12 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
                 loss_dec = ae_loss(images_out, images)
                 gauss_fit = gdc(features)
                 loss_gauss = gd_loss(gauss_fit, gauss_yes)
-                L = loss_dec + loss_gauss
+                if epoch == 0: # too early to teach gauss
+                    L = loss_dec
+                elif epoch < 16:
+                    L = loss_dec + loss_gauss/120
+                else: # ready for aggressive immersion!
+                    L = loss_dec + loss_gauss/20
                 L.backward()
 
             enc_trainer.step(batch_size)

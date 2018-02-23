@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--feature-size', type=int, default=4, metavar='N',
                         help='dimensions of the latent feature vector (default: 4)')
     parser.add_argument('--ckpt-dir', default=None, metavar='ckpt',
-                        help='training session directory (default: mnistNs.ckpt) ' +
+                        help='training session directory (default: mnistN.ckpt) ' +
                              'for storing model parameters and trainer states')
     opt = parser.parse_args()
 
@@ -43,7 +43,7 @@ def main():
         batch_size=opt.batch_size, shuffle=False)
 
     ckpt_dir = opt.ckpt_dir if opt.ckpt_dir is not None \
-                            else 'mnist{}s.ckpt'.format(opt.feature_size)
+                            else 'mnist{}.ckpt'.format(opt.feature_size)
     sess = TrainingSession(ckpt_dir)
     sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
     sess.add_block('dec', ImgDecoder(), opt.lr)

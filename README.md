@@ -29,8 +29,8 @@ optional arguments:
   --batch-size B    batch size for training and testing (default: 100)
   --epochs E        number of epochs to train (default: 5)
   --lr LR           learning rate with adam optimizer (default: 0.005)
-  --feature-size N  dimensions of the latent feature vector (default: 8)
-  --ckpt-dir ckpt   training session directory (default: mnistNs.ckpt) for
+  --feature-size N  dimensions of the latent feature vector (default: 4)
+  --ckpt-dir ckpt   training session directory (default: mnistN.ckpt) for
                     storing model parameters and trainer states
 ```
 

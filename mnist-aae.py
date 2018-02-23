@@ -100,7 +100,7 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
                 features = encode(enc, images, labels)
                 images_out = decode(dec, features, labels)
                 loss_dec = ae_loss(images_out, images)
-                gauss_fit = gdc(gauss_sample)
+                gauss_fit = gdc(features)
                 loss_gauss = gd_loss(gauss_fit, gauss_yes)
                 L = loss_dec + loss_gauss
                 L.backward()

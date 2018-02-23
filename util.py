@@ -13,4 +13,3 @@ def save_images(images, imgdir, startid=1, nwidth=5):
         img = Image.fromarray(img*255)
         img.convert('L').save(os.path.join(imgdir, str(startid).zfill(nwidth) + ".png"))
         startid += 1
-    print(len(images), "test images written to", imgdir)

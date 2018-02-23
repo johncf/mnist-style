@@ -77,11 +77,13 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
     ae_loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
     gd_loss = gluon.loss.SoftmaxCrossEntropyLoss()
     ae_metric = mx.metric.MSE()
-    gd_metric = mx.metric.Accuracy()
+    gd_metric_real = mx.metric.Accuracy()
+    gd_metric_fake = mx.metric.Accuracy()
 
     for epoch in range(epochs):
         ae_metric.reset()
-        gd_metric.reset()
+        gd_metric_real.reset()
+        gd_metric_fake.reset()
         for i, (images, labels) in enumerate(train_data):
             # prepare data batch
             images = images.as_in_context(ctx)
@@ -126,20 +128,23 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
 
             gdc_trainer.step(batch_size)
 
-            gd_metric.update([gauss_yes], [predict_real])
-            gd_metric.update([gauss_not], [predict_fake])
+            gd_metric_real.update([gauss_yes], [predict_real])
+            gd_metric_fake.update([gauss_not], [predict_fake])
 
             if (i+1) % 100 == 0:
                 name, mse = ae_metric.get()
                 print('[Epoch {} Batch {}] Training: {}={:.4f}'.format(epoch+1, i+1, name, mse))
 
         name, mse = ae_metric.get()
-        print('[Epoch {}] Training:\n  AutoEncoder: {}={:.4f}'.format(epoch+1, name, mse))
-        name, mse = gd_metric.get()
-        print('  GaussDiscriminator: {}={:.4f}'.format(name, mse))
+        print('[Epoch {}] Training:'.format(epoch+1))
+        print('  AutoEncoder: {}={:.4f}'.format(name, mse))
+        name, mse = gd_metric_real.get()
+        print('  GaussDiscriminator: actual gauss {}={:.4f}'.format(name, mse))
+        name, mse = gd_metric_fake.get()
+        print('  GaussDiscriminator: feature space {}={:.4f}'.format(name, mse))
 
-        name, test_mse = test(ctx, enc, dec, test_data)
-        print('[Epoch {}] Validation: {}={:.4f}'.format(epoch+1, name, test_mse))
+        print('[Epoch {}] Validation:'.format(epoch+1))
+        test(ctx, enc, dec, gdc, test_data)
 
         # save states and parameters
         enc.save_params(save_paths['enc'])
@@ -165,26 +170,36 @@ def restore_trainer(trainer, state_file):
 
 
 test_idx = 1
-def test(ctx, enc, dec, test_data):
+def test(ctx, enc, dec, gdc, test_data):
     global test_idx
-    metric = mx.metric.MSE()
+    ae_metric = mx.metric.MSE()
+    gd_metric = mx.metric.Accuracy()
     samples = []
     for images, labels in test_data:
+        gauss_yes = nd.ones((labels.shape[0], 1), ctx=ctx)
+
         features = encode(enc, images, labels)
         images_out = decode(dec, features, labels)
-        metric.update([images], [images_out])
+        ae_metric.update([images], [images_out])
+
+        gauss_fit = gdc(features)
+        gd_metric.update([gauss_yes], [gauss_fit])
 
         idx = np.random.randint(images.shape[0])
         samples.append(mx.nd.concat(images[idx], images_out[idx], dim=2)[0].asnumpy())
+
+    name, mse = ae_metric.get()
+    print('  AutoEncoder: {}={:.4f}'.format(name, mse))
+    name, mse = gd_metric.get()
+    print('  GaussDiscriminator: {}={:.4f}'.format(name, mse))
 
     try:
         imgdir = '/tmp/mnist'
         save_images(samples[::2], imgdir, test_idx*1000)
         test_idx += 1
+        print("  test images written to", imgdir)
     except Exception as e:
-        print("writing images failed:", e)
-
-    return metric.get()
+        print("  writing images failed:", e)
 
 
 if __name__ == '__main__':

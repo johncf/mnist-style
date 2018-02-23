@@ -1,3 +1,4 @@
 data
 pyenv
-*.params
+__pycache__
+*.ckpt

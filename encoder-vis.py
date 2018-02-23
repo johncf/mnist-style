@@ -11,7 +11,7 @@ import pandas as pd
 import seaborn as sns
 
 from encoder import ImgEncoder, encode
-from util import restore_block
+from persistence import restore_block
 
 
 def main():

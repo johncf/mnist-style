@@ -11,7 +11,8 @@ from mxnet import gluon, autograd
 
 from encoder import ImgEncoder, encode
 from decoder import ImgDecoder, decode
-from util import restore_block, save_images
+from persistence import TrainingSession
+from util import save_images
 
 
 def main():
@@ -22,11 +23,11 @@ def main():
                         help='number of epochs to train (default: 5)')
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
-    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='dimensions of the latent feature vector (default: 8)')
-    parser.add_argument('--state-prefix', default='mnist', metavar='pre',
-                        help='path-prefix of state files (default: mnist) ' +
-                             'state files will be of the form "prefixN.key.params"')
+    parser.add_argument('--feature-size', type=int, default=4, metavar='N',
+                        help='dimensions of the latent feature vector (default: 4)')
+    parser.add_argument('--ckpt-dir', default=None, metavar='ckpt',
+                        help='training session directory (default: mnistNs.ckpt) ' +
+                             'for storing model parameters and trainer states')
     opt = parser.parse_args()
 
     # data
@@ -41,32 +42,24 @@ def main():
         gluon.data.vision.MNIST('./data', train=False, transform=transformer),
         batch_size=opt.batch_size, shuffle=False)
 
-    # network
-    enc = ImgEncoder(opt.feature_size)
-    dec = ImgDecoder()
+    ckpt_dir = opt.ckpt_dir if opt.ckpt_dir is not None \
+                            else 'mnist{}s.ckpt'.format(opt.feature_size)
+    sess = TrainingSession(ckpt_dir)
+    sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
+    sess.add_block('dec', ImgDecoder(), opt.lr)
 
-    save_paths = dict([(key, '{}{}.{}.params'.format(opt.state_prefix, opt.feature_size, key))
-                        for key in ['enc', 'dec', 'enc_tr', 'dec_tr']])
-
-    train(enc, dec, train_data, test_data, save_paths,
-          lr=opt.lr, epochs=opt.epochs)
+    train(sess, train_data, test_data, epochs=opt.epochs)
 
 
-def train(enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
-    # computation context
+def train(sess, train_data, test_data, epochs=40):
     ctx = mx.cpu()
+    sess.init_all(ctx)
 
-    # initialize parameters
-    xavinit = mx.init.Xavier(magnitude=2.24)
-    init_block(enc, xavinit, save_paths['enc'], ctx)
-    init_block(dec, xavinit, save_paths['dec'], ctx)
+    enc = sess.get_block('enc')
+    dec = sess.get_block('dec')
 
-    enc_trainer = gluon.Trainer(enc.collect_params(), 'adam', {'learning_rate': lr})
-    dec_trainer = gluon.Trainer(dec.collect_params(), 'adam', {'learning_rate': lr})
-
-    # try to restore trainer states
-    restore_trainer(enc_trainer, save_paths['enc_tr'])
-    restore_trainer(dec_trainer, save_paths['dec_tr'])
+    enc_trainer = sess.get_trainer('enc')
+    dec_trainer = sess.get_trainer('dec')
 
     loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
     metric = mx.metric.MSE()
@@ -76,14 +69,16 @@ def train(enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
         for i, (images, labels) in enumerate(train_data):
             images = images.as_in_context(ctx)
             labels = labels.as_in_context(ctx)
+
+            batch_size = images.shape[0]
+
             # record computation graph for differentiating with backward()
             with autograd.record():
                 features = encode(enc, images, labels)
                 images_out = decode(dec, features, labels)
                 L = loss(images_out, images)
                 L.backward()
-            # weights train step
-            batch_size = images.shape[0]
+
             enc_trainer.step(batch_size)
             dec_trainer.step(batch_size)
 
@@ -99,24 +94,8 @@ def train(enc, dec, train_data, test_data, save_paths, lr=0.01, epochs=40):
         name, test_mse = test(ctx, enc, dec, test_data)
         print('[Epoch {}] Validation: {}={:.4f}'.format(epoch+1, name, test_mse))
 
-        # save states and parameters
-        enc.save_params(save_paths['enc'])
-        dec.save_params(save_paths['dec'])
-        enc_trainer.save_states(save_paths['enc_tr'])
-        dec_trainer.save_states(save_paths['dec_tr'])
-        print('Model parameters and trainer state saved to:')
-        print('  {}  {}\n  {}  {}'.format(save_paths['enc'], save_paths['enc_tr'],
-                                          save_paths['dec'], save_paths['dec_tr']))
-
-
-def init_block(block, initializer, param_file, ctx):
-    if not restore_block(block, param_file, ctx):
-        block.initialize(initializer, ctx)
-
-
-def restore_trainer(trainer, state_file):
-    if os.path.isfile(state_file):
-        trainer.load_states(state_file)
+        sess.save_all()
+        print('Model parameters and trainer state saved.')
 
 
 test_idx = 1
@@ -136,6 +115,7 @@ def test(ctx, enc, dec, test_data):
         imgdir = '/tmp/mnist'
         save_images(samples[::2], imgdir, test_idx*1000)
         test_idx += 1
+        print("test images written to", imgdir)
     except Exception as e:
         print("writing images failed:", e)
 

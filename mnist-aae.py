@@ -12,7 +12,8 @@ from mxnet import gluon, autograd, nd
 from encoder import ImgEncoder, encode
 from decoder import ImgDecoder, decode
 from gaussian import GaussDiscriminator, GaussSampler
-from util import restore_block, save_images
+from persistence import TrainingSession
+from util import save_images
 
 
 def main():
@@ -23,11 +24,11 @@ def main():
                         help='number of epochs to train (default: 24)')
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
-    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
+    parser.add_argument('--feature-size', type=int, default=4, metavar='N',
                         help='dimensions of the latent feature vector (default: 4)')
-    parser.add_argument('--state-prefix', default='mnist', metavar='pre',
-                        help='path-prefix of state files (default: mnist) ' +
-                             'state files will be of the form "prefixN.key.params"')
+    parser.add_argument('--ckpt-dir', default=None, metavar='ckpt',
+                        help='training session directory (default: mnistN.ckpt) ' +
+                             'for storing model parameters and trainer states')
     opt = parser.parse_args()
 
     # data
@@ -43,36 +44,27 @@ def main():
         batch_size=opt.batch_size, shuffle=False)
     gauss_data = GaussSampler(opt.feature_size, batch_size=opt.batch_size, variance=2)
 
-    # network
-    enc = ImgEncoder(opt.feature_size)
-    dec = ImgDecoder()
-    gdc = GaussDiscriminator(base_size=opt.feature_size*3//2)
+    ckpt_dir = opt.ckpt_dir if opt.ckpt_dir is not None \
+                            else 'mnist{}.ckpt'.format(opt.feature_size)
+    sess = TrainingSession(ckpt_dir)
+    sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
+    sess.add_block('dec', ImgDecoder(), opt.lr)
+    sess.add_block('gdc', GaussDiscriminator(base_size=opt.feature_size*3//2), opt.lr*2)
 
-    save_paths = dict([(key, '{}{}.{}.params'.format(opt.state_prefix, opt.feature_size, key))
-                        for key in ['enc', 'dec', 'gdc', 'enc_tr', 'dec_tr', 'gdc_tr']])
-
-    train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths,
-          lr=opt.lr, epochs=opt.epochs)
+    train(sess, train_data, test_data, gauss_data, epochs=opt.epochs)
 
 
-def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01, epochs=40):
-    # computation context
+def train(sess, train_data, test_data, gauss_data, epochs=40):
     ctx = mx.cpu()
+    sess.init_all(ctx)
 
-    # initialize parameters
-    xavinit = mx.init.Xavier(magnitude=2.24)
-    init_block(enc, xavinit, save_paths['enc'], ctx)
-    init_block(dec, xavinit, save_paths['dec'], ctx)
-    init_block(gdc, xavinit, save_paths['gdc'], ctx)
+    enc = sess.get_block('enc')
+    dec = sess.get_block('dec')
+    gdc = sess.get_block('gdc')
 
-    enc_trainer = gluon.Trainer(enc.collect_params(), 'adam', {'learning_rate': lr})
-    dec_trainer = gluon.Trainer(dec.collect_params(), 'adam', {'learning_rate': lr})
-    gdc_trainer = gluon.Trainer(gdc.collect_params(), 'adam', {'learning_rate': lr*2})
-
-    # try to restore trainer states
-    restore_trainer(enc_trainer, save_paths['enc_tr'])
-    restore_trainer(dec_trainer, save_paths['dec_tr'])
-    restore_trainer(gdc_trainer, save_paths['gdc_tr'])
+    enc_trainer = sess.get_trainer('enc')
+    dec_trainer = sess.get_trainer('dec')
+    gdc_trainer = sess.get_trainer('gdc')
 
     ae_loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
     gd_loss = gluon.loss.SoftmaxCrossEntropyLoss()
@@ -146,27 +138,8 @@ def train(enc, dec, gdc, train_data, test_data, gauss_data, save_paths, lr=0.01,
         print('[Epoch {}] Validation:'.format(epoch+1))
         test(ctx, enc, dec, gdc, test_data)
 
-        # save states and parameters
-        enc.save_params(save_paths['enc'])
-        dec.save_params(save_paths['dec'])
-        gdc.save_params(save_paths['gdc'])
-        enc_trainer.save_states(save_paths['enc_tr'])
-        dec_trainer.save_states(save_paths['dec_tr'])
-        gdc_trainer.save_states(save_paths['gdc_tr'])
-        print('Model parameters and trainer state saved to:')
-        print('\n'.join(['  {}  {}']*3).format(save_paths['enc'], save_paths['enc_tr'],
-                                               save_paths['dec'], save_paths['dec_tr'],
-                                               save_paths['gdc'], save_paths['gdc_tr']))
-
-
-def init_block(block, initializer, param_file, ctx):
-    if not restore_block(block, param_file, ctx):
-        block.initialize(initializer, ctx)
-
-
-def restore_trainer(trainer, state_file):
-    if os.path.isfile(state_file):
-        trainer.load_states(state_file)
+        sess.save_all()
+        print('Model parameters and trainer state saved.')
 
 
 test_idx = 1

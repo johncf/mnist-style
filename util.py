@@ -1,11 +1,5 @@
 import os
 
-def restore_block(block, param_file, ctx):
-    if os.path.isfile(param_file):
-        block.load_params(param_file, ctx)
-        return True
-    return False
-
 def save_images(images, imgdir, startid=1, nwidth=5):
     from PIL import Image
     os.makedirs(imgdir, exist_ok=True)

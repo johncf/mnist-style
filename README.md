@@ -1,10 +1,20 @@
 # MNIST Style-based Auto-Encoder
 
+An [Adversarial Auto-Encoder][aae] (AAE) model that encode style information of
+MNIST images on a Gaussian distributed multivariate.
+
+The model used here is slightly different from the one discussed in section 4
+(Supervised Adversarial Autoencoders) of [the paper][aae]. In the paper, only
+the decoder is provided with a label indicating the digit. Whereas here, we
+also provide the encoder with the label.
+
+[aae]: https://arxiv.org/abs/1511.05644
+
 ## Roadmap
 
 - [x] Simple auto-encoder
 - [x] A script to visualize latent feature-space (style-space).
-- [x] Adverserial auto-encoder to fit the style-space into a gaussian distribution.
+- [x] Adversarial auto-encoder to fit the style-space into a Gaussian distribution.
 - [ ] A script to generate images of all digits from a random style-vector.
 
 ## Setup
@@ -97,7 +107,7 @@ with the simple approach ([`mnist-sae.py`](./mnist-sae.py)).
 
 _(click to enlarge)_
 
-And below is the same from an adverserially trained auto-encoder model
+And below is the same from an adversarially trained auto-encoder model
 ([`mnist-aae.py`](./mnist-aae.py)).
 
 [![aae-sample](https://i.imgur.com/pI3iQyBl.png)](https://i.imgur.com/pI3iQyB.png)

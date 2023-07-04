@@ -10,7 +10,7 @@ license = {file = "LICENSE"}
 dependencies = [
     "mxnet~=1.1",
     "numpy>=1.13,<1.23",
-    "Pillow~=8.1",
+    "Pillow~=9.2",
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",

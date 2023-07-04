@@ -2,33 +2,37 @@
 
 import argparse
 import logging
-logging.basicConfig(level=logging.DEBUG)
 import os
 
 import numpy as np
 import mxnet as mx
 from mxnet import gluon, autograd, nd
 
-from encoder import ImgEncoder, encode
-from decoder import ImgDecoder, decode
-from gaussian import GaussDiscriminator, GaussSampler
-from persistence import TrainingSession
-from util import save_images
+from mnist_style.encoder import ImgEncoder, encode
+from mnist_style.decoder import ImgDecoder, decode
+from mnist_style.gaussian import GaussDiscriminator, GaussSampler
+from mnist_style.persistence import TrainingSession
+from mnist_style.util import save_images
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 def main():
     parser = argparse.ArgumentParser(description='MNIST Adverserial Auto-Encoder')
     parser.add_argument('--batch-size', type=int, default=100, metavar='B',
                         help='batch size for training and testing (default: 100)')
-    parser.add_argument('--epochs', type=int, default=24, metavar='E',
-                        help='number of epochs to train (default: 24)')
+    parser.add_argument('--epochs', type=int, default=12, metavar='E',
+                        help='number of epochs to train (default: 12)')
     parser.add_argument('--lr', type=float, default=0.005,
                         help='learning rate with adam optimizer (default: 0.005)')
     parser.add_argument('--feature-size', type=int, default=4, metavar='N',
                         help='dimensions of the latent feature vector (default: 4)')
-    parser.add_argument('--ckpt-dir', default=None, metavar='ckpt',
-                        help='training session directory (default: mnistN.ckpt) ' +
+    parser.add_argument('--ckpt-dir', default='./ckpt-aae', metavar='ckpt',
+                        help='training session directory (default: ./ckpt-aae) ' +
                              'for storing model parameters and trainer states')
+    parser.add_argument('--data-dir', default='./data', metavar='data',
+                        help='MNIST data directory (default: ./data) ' +
+                             '(gets created and downloaded to, if doesn\'t exist)')
     opt = parser.parse_args()
 
     # data
@@ -37,16 +41,14 @@ def main():
         return image, mx.nd.one_hot(mx.nd.array([label]), 10)[0]
 
     train_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST('./data', train=True, transform=transformer),
+        gluon.data.vision.MNIST(opt.data_dir, train=True, transform=transformer),
         batch_size=opt.batch_size, shuffle=True, last_batch='discard')
     test_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST('./data', train=False, transform=transformer),
+        gluon.data.vision.MNIST(opt.data_dir, train=False, transform=transformer),
         batch_size=opt.batch_size, shuffle=False)
     gauss_data = GaussSampler(opt.feature_size, batch_size=opt.batch_size, variance=2)
 
-    ckpt_dir = opt.ckpt_dir if opt.ckpt_dir is not None \
-                            else 'mnist{}.ckpt'.format(opt.feature_size)
-    sess = TrainingSession(ckpt_dir)
+    sess = TrainingSession(opt.ckpt_dir)
     sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
     sess.add_block('dec', ImgDecoder(), opt.lr)
     sess.add_block('gdc', GaussDiscriminator(base_size=opt.feature_size*3//2), opt.lr*2)

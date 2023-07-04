@@ -1,0 +1,37 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "mnist_style"
+authors = [{name = "John C", email = "john.ch.fr@gmail.com"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+dependencies = [
+    "mxnet~=1.1",
+    "numpy>=1.13,<1.23",
+    "Pillow~=8.1",
+]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dynamic = ["version", "description"]
+
+[project.optional-dependencies]
+vis = [
+    "matplotlib~=3.0",
+    "pandas~=1.0",
+    "seaborn~=0.12.0",
+]
+dev = [
+    "pip-tools"
+]
+
+[project.scripts]
+encoder-vis = "mnist_style.tool.encoder_vis:main"
+train-aae = "mnist_style.tool.train_aae:main"
+train-sae = "mnist_style.tool.train_sae:main"
+
+[project.urls]
+Home = "https://github.com/johncf/mnist-style"

@@ -2,3 +2,6 @@ data
 pyenv
 __pycache__
 *.ckpt
+*.trainer
+*.params
+*.png

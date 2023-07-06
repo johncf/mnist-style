@@ -2,179 +2,138 @@
 
 import argparse
 import logging
+import math
 import os
 
-import numpy as np
-import mxnet as mx
-from mxnet import gluon, autograd, nd
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
-from mnist_style.encoder import ImgEncoder, encode
-from mnist_style.decoder import ImgDecoder, decode
-from mnist_style.gaussian import GaussDiscriminator, GaussSampler
-from mnist_style.persistence import TrainingSession
-from mnist_style.util import save_images
+from torchvision.datasets import MNIST
+from torchvision import transforms
+from torch.utils.data import DataLoader
+
+from mnist_style.models import Encoder, Decoder, Discriminator
+from mnist_style.persistence import load_models, save_models
+
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def main():
     parser = argparse.ArgumentParser(description='MNIST Adverserial Auto-Encoder')
-    parser.add_argument('--batch-size', type=int, default=100, metavar='B',
-                        help='batch size for training and testing (default: 100)')
+    parser.add_argument('--batch-size', type=int, default=64, metavar='B',
+                        help='batch size for training and testing (default: 64)')
     parser.add_argument('--epochs', type=int, default=12, metavar='E',
                         help='number of epochs to train (default: 12)')
-    parser.add_argument('--lr', type=float, default=0.005,
-                        help='learning rate with adam optimizer (default: 0.005)')
-    parser.add_argument('--feature-size', type=int, default=4, metavar='N',
-                        help='dimensions of the latent feature vector (default: 4)')
-    parser.add_argument('--ckpt-dir', default='./ckpt-aae', metavar='ckpt',
-                        help='training session directory (default: ./ckpt-aae) ' +
+    parser.add_argument('--lr', type=float, default=4e-4,
+                        help='learning rate with adam optimizer (default: 0.0004)')
+    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
+                        help='dimensions of the latent feature vector (default: 8)')
+    parser.add_argument('--ckpt-dir', default='./pt-aae', metavar='ckpt',
+                        help='training session directory (default: ./pt-aae) ' +
                              'for storing model parameters and trainer states')
     parser.add_argument('--data-dir', default='./data', metavar='data',
                         help='MNIST data directory (default: ./data) ' +
                              '(gets created and downloaded to, if doesn\'t exist)')
     opt = parser.parse_args()
 
-    # data
-    def transformer(image, label):
-        image = image.reshape((1,28,28)).astype(np.float32)/255
-        return image, mx.nd.one_hot(mx.nd.array([label]), 10)[0]
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
-    train_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST(opt.data_dir, train=True, transform=transformer),
-        batch_size=opt.batch_size, shuffle=True, last_batch='discard')
-    test_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST(opt.data_dir, train=False, transform=transformer),
-        batch_size=opt.batch_size, shuffle=False)
-    gauss_data = GaussSampler(opt.feature_size, batch_size=opt.batch_size, variance=2)
+    train_dataset = MNIST(root=opt.data_dir, train=True, download=True, transform=transform)
+    test_dataset = MNIST(root=opt.data_dir, train=False, download=False, transform=transform)
 
-    sess = TrainingSession(opt.ckpt_dir)
-    sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
-    sess.add_block('dec', ImgDecoder(), opt.lr)
-    sess.add_block('gdc', GaussDiscriminator(base_size=opt.feature_size*3//2), opt.lr*2)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=400, shuffle=False)
 
-    train(sess, train_data, test_data, gauss_data, epochs=opt.epochs)
+    # Create model instances
+    latent_dim = opt.feature_size
+    encoder = Encoder(latent_dim)
+    decoder = Decoder(latent_dim)
+    discriminator = Discriminator(latent_dim)
 
+    # Define optimizers
+    encoder_opt = optim.AdamW(encoder.parameters(), lr=opt.lr)
+    decoder_opt = optim.Adam(decoder.parameters(), lr=opt.lr)
+    discriminator_opt = optim.Adam(discriminator.parameters(), lr=opt.lr)
 
-def train(sess, train_data, test_data, gauss_data, epochs=40):
-    ctx = mx.cpu()
-    sess.init_all(ctx)
+    # Define loss functions
+    autoenc_loss_func = nn.L1Loss()
+    adversarial_loss_func = nn.BCELoss()
 
-    enc = sess.get_block('enc')
-    dec = sess.get_block('dec')
-    gdc = sess.get_block('gdc')
-
-    enc_trainer = sess.get_trainer('enc')
-    dec_trainer = sess.get_trainer('dec')
-    gdc_trainer = sess.get_trainer('gdc')
-
-    ae_loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
-    gd_loss = gluon.loss.SoftmaxCrossEntropyLoss()
-    ae_metric = mx.metric.MSE()
-    gd_metric_real = mx.metric.Accuracy()
-    gd_metric_fake = mx.metric.Accuracy()
-
-    for epoch in range(epochs):
-        ae_metric.reset()
-        gd_metric_real.reset()
-        gd_metric_fake.reset()
-        for i, (images, labels) in enumerate(train_data):
-            # prepare data batch
-            images = images.as_in_context(ctx)
-            labels = labels.as_in_context(ctx)
-            gauss_sample = gauss_data.next().as_in_context(ctx)
-
-            batch_size = images.shape[0]
-            assert gauss_sample.shape[0] == batch_size
-
-            # labels for gauss discriminator training
-            gauss_yes = nd.ones((batch_size, 1), ctx=ctx)
-            gauss_not = nd.zeros((batch_size, 1), ctx=ctx)
-
-            # train autoencoder
-            with autograd.record():
-                features = encode(enc, images, labels)
-                images_out = decode(dec, features, labels)
-                loss_dec = ae_loss(images_out, images)
-                gauss_fit = gdc(features)
-                loss_gauss = gd_loss(gauss_fit, gauss_yes)
-                if epoch == 0: # too early to teach gauss
-                    L = loss_dec
-                elif epoch < 12:
-                    L = loss_dec + loss_gauss/120
-                else: # ready for aggressive immersion!
-                    L = loss_dec + loss_gauss/20
-                L.backward()
-
-            enc_trainer.step(batch_size)
-            dec_trainer.step(batch_size)
-
-            ae_metric.update([images], [images_out])
-
-            # train discriminator
-            with autograd.record():
-                predict_real = gdc(gauss_sample)
-                loss_real = gd_loss(predict_real, gauss_yes)
-                predict_fake = gdc(features)
-                loss_fake = gd_loss(predict_fake, gauss_not)
-                L = loss_real + loss_fake
-                L.backward()
-
-            gdc_trainer.step(batch_size)
-
-            gd_metric_real.update([gauss_yes], [predict_real])
-            gd_metric_fake.update([gauss_not], [predict_fake])
-
-            if (i+1) % 100 == 0:
-                name, mse = ae_metric.get()
-                print('[Epoch {} Batch {}] Training: {}={:.4f}'.format(epoch+1, i+1, name, mse))
-
-        name, mse = ae_metric.get()
-        print('[Epoch {}] Training:'.format(epoch+1))
-        print('  AutoEncoder: {}={:.4f}'.format(name, mse))
-        name, mse = gd_metric_real.get()
-        print('  GaussDiscriminator: actual gauss detection {}={:.4f}'.format(name, mse))
-        name, mse = gd_metric_fake.get()
-        print('  GaussDiscriminator: feature space detection {}={:.4f}'.format(name, mse))
-
-        print('[Epoch {}] Validation:'.format(epoch+1))
-        test(ctx, enc, dec, gdc, test_data)
-
-        sess.save_all()
-        print('Model parameters and trainer state saved.')
+    encoder.train()
+    decoder.train()
+    discriminator.train()
+    for epoch in range(opt.epochs):
+        g_loss_factor = 0.05 * epoch / (opt.epochs - 2)
+        print(f"Epoch {epoch+1} training:")
+        mean_ae_loss, mean_g_loss, mean_d_loss = train_one_epoch(
+            train_dataloader, encoder, decoder, discriminator,
+            encoder_opt, decoder_opt, discriminator_opt,
+            autoenc_loss_func, adversarial_loss_func, g_loss_factor)
+        true_mean_g_loss = math.nan if g_loss_factor == 0.0 else mean_g_loss/g_loss_factor
+        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
+        print(f"  Average Generator Loss: {mean_g_loss:.4f} ({true_mean_g_loss:.4f} * {g_loss_factor:.3f})")
+        print(f"  Average Discriminator Loss: {mean_d_loss:.4f}")
+        save_models({
+            "encoder": encoder, "decoder": decoder, "discriminator": discriminator
+        }, opt.ckpt_dir)
+        # print(f"Epoch {epoch+1} validation:")
+        # TODO mean_ae_loss, mean_enc_error = test_one_epoch(test_dataloader, encoder, decoder)
+    print("Done!")
 
 
-test_idx = 1
-def test(ctx, enc, dec, gdc, test_data):
-    global test_idx
-    ae_metric = mx.metric.MSE()
-    gd_metric = mx.metric.Accuracy()
-    samples = []
-    for images, labels in test_data:
-        gauss_yes = nd.ones((labels.shape[0], 1), ctx=ctx)
+def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, discriminator: Discriminator,
+                    encoder_opt: optim.Optimizer, decoder_opt: optim.Optimizer, discriminator_opt: optim.Optimizer,
+                    ae_loss_func, adv_loss_func, g_loss_factor: float = 0.1):
+    cumulative_ae_loss = 0.0
+    cumulative_d_loss = 0.0
+    cumulative_g_loss = 0.0
+    num_batches = 0
 
-        features = encode(enc, images, labels)
-        images_out = decode(dec, features, labels)
-        ae_metric.update([images], [images_out])
+    for batch, _ in dataloader:
+        # batch = batch.to(device)  # TODO
+        latent_code = encoder(batch)
+        decoded_batch = decoder(latent_code)
 
-        gauss_fit = gdc(features)
-        gd_metric.update([gauss_yes], [gauss_fit])
+        # Update discriminator
+        discriminator_opt.zero_grad()
+        fake_output = discriminator(latent_code)
+        fake_d_loss = adv_loss_func(fake_output, torch.ones_like(fake_output))
+        fake_d_loss.backward(retain_graph=True)
+        real_output = discriminator(torch.randn_like(latent_code) * 2)  # .to(device)
+        real_d_loss = adv_loss_func(real_output, torch.zeros_like(real_output))
+        real_d_loss.backward()
+        discriminator_opt.step()
+        cumulative_d_loss += fake_d_loss.item() + real_d_loss.item()
 
-        idx = np.random.randint(images.shape[0])
-        samples.append(mx.nd.concat(images[idx], images_out[idx], dim=2)[0].asnumpy())
+        # Update encoder/generator and decoder
+        encoder_opt.zero_grad()
+        decoder_opt.zero_grad()
+        ae_loss = ae_loss_func(decoded_batch, batch)
+        ae_loss.backward(retain_graph=True)
+        fake_output = discriminator(latent_code)  # recompute, as we updated discriminator above
+        fake_g_loss = adv_loss_func(fake_output, torch.zeros_like(fake_output)) * g_loss_factor
+        fake_g_loss.backward()
+        encoder_opt.step()
+        decoder_opt.step()
 
-    name, mse = ae_metric.get()
-    print('  AutoEncoder: {}={:.4f}'.format(name, mse))
-    name, mse = gd_metric.get()
-    print('  GaussDiscriminator: feature space satisfaction {}={:.4f}'.format(name, mse))
+        cumulative_ae_loss += ae_loss.item()
+        cumulative_g_loss += fake_g_loss.item()
+        num_batches += 1
 
-    try:
-        imgdir = '/tmp/mnist'
-        save_images(samples[::2], imgdir, test_idx*1000)
-        test_idx += 1
-        print("  test images written to", imgdir)
-    except Exception as e:
-        print("  writing images failed:", e)
+    mean_ae_loss = cumulative_ae_loss / num_batches
+    mean_g_loss = cumulative_g_loss / num_batches
+    mean_d_loss = cumulative_d_loss / num_batches
+    return mean_ae_loss, mean_g_loss, mean_d_loss
+
+
+def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, latent_norm_scale: int = 2):
+    # TODO return avg_autoencoder_loss, encoder_distribution_errors?
+    pass
 
 
 if __name__ == '__main__':

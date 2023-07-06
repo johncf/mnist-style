@@ -15,14 +15,17 @@ also provide the encoder with the label.
 - [x] Simple auto-encoder
 - [x] A script to visualize latent feature-space (style-space).
 - [x] Adversarial auto-encoder to fit the style-space into a Gaussian distribution.
+- [ ] Make Encoder a digit-classifier!
 - [ ] A script to generate images of all digits from a random style-vector.
+- [ ] Simple CI pipeline
+- [ ] GPU support
 
 ## Setup
 
 ```
 $ python3 -m venv pyenv
 $ source pyenv/bin/activate
-$ pip install .
+$ pip install '.[cpu]' --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
 ## Usage

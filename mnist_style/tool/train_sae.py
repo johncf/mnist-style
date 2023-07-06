@@ -2,16 +2,19 @@
 
 import argparse
 import logging
+import math
 import os
 
-import numpy as np
-import mxnet as mx
-from mxnet import gluon, autograd
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
-from mnist_style.encoder import ImgEncoder, encode
-from mnist_style.decoder import ImgDecoder, decode
-from mnist_style.persistence import TrainingSession
-from mnist_style.util import save_images
+from torchvision.datasets import MNIST
+from torchvision import transforms
+from torch.utils.data import DataLoader
+
+from mnist_style.models import Encoder, Decoder
+from mnist_style.persistence import load_models, save_models
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -19,109 +22,86 @@ logging.basicConfig(level=logging.DEBUG)
 def main():
     parser = argparse.ArgumentParser(description='MNIST Simple Auto-Encoder')
     parser.add_argument('--batch-size', type=int, default=100, metavar='B',
-                        help='batch size for training and testing (default: 100)')
-    parser.add_argument('--epochs', type=int, default=5, metavar='E',
-                        help='number of epochs to train (default: 5)')
-    parser.add_argument('--lr', type=float, default=0.005,
-                        help='learning rate with adam optimizer (default: 0.005)')
-    parser.add_argument('--feature-size', type=int, default=4, metavar='N',
-                        help='dimensions of the latent feature vector (default: 4)')
-    parser.add_argument('--ckpt-dir', default='./ckpt-sae', metavar='ckpt',
-                        help='training session directory (default: ./ckpt-sae) ' +
+                        help='batch size for training and testing (default: 64)')
+    parser.add_argument('--epochs', type=int, default=6, metavar='E',
+                        help='number of epochs to train (default: 6)')
+    parser.add_argument('--lr', type=float, default=4e-4,
+                        help='learning rate with adam optimizer (default: 0.0004)')
+    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
+                        help='dimensions of the latent feature vector (default: 8)')
+    parser.add_argument('--ckpt-dir', default='./pt-sae', metavar='ckpt',
+                        help='training session directory (default: ./pt-sae) ' +
                              'for storing model parameters and trainer states')
     parser.add_argument('--data-dir', default='./data', metavar='data',
                         help='MNIST data directory (default: ./data) ' +
                              '(gets created and downloaded to, if doesn\'t exist)')
     opt = parser.parse_args()
 
-    # data
-    def transformer(image, label):
-        image = image.reshape((1,28,28)).astype(np.float32)/255
-        return image, mx.nd.one_hot(mx.nd.array([label]), 10)[0]
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
-    train_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST(opt.data_dir, train=True, transform=transformer),
-        batch_size=opt.batch_size, shuffle=True, last_batch='discard')
-    test_data = gluon.data.DataLoader(
-        gluon.data.vision.MNIST(opt.data_dir, train=False, transform=transformer),
-        batch_size=opt.batch_size, shuffle=False)
+    train_dataset = MNIST(root=opt.data_dir, train=True, download=True, transform=transform)
+    test_dataset = MNIST(root=opt.data_dir, train=False, download=False, transform=transform)
 
-    sess = TrainingSession(opt.ckpt_dir)
-    sess.add_block('enc', ImgEncoder(opt.feature_size), opt.lr)
-    sess.add_block('dec', ImgDecoder(), opt.lr)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True)
+    test_dataloader = DataLoader(test_dataset, batch_size=400, shuffle=False)
 
-    train(sess, train_data, test_data, epochs=opt.epochs)
+    # Create model instances
+    latent_dim = opt.feature_size
+    encoder = Encoder(latent_dim)
+    decoder = Decoder(latent_dim)
 
+    # Define optimizers
+    encoder_opt = optim.AdamW(encoder.parameters(), lr=opt.lr)
+    decoder_opt = optim.Adam(decoder.parameters(), lr=opt.lr)
 
-def train(sess, train_data, test_data, epochs=40):
-    ctx = mx.cpu()
-    sess.init_all(ctx)
+    # Define loss functions
+    autoenc_loss_func = nn.L1Loss()
 
-    enc = sess.get_block('enc')
-    dec = sess.get_block('dec')
-
-    enc_trainer = sess.get_trainer('enc')
-    dec_trainer = sess.get_trainer('dec')
-
-    loss = gluon.loss.SigmoidBCELoss(from_sigmoid=True)
-    metric = mx.metric.MSE()
-
-    for epoch in range(epochs):
-        metric.reset()
-        for i, (images, labels) in enumerate(train_data):
-            images = images.as_in_context(ctx)
-            labels = labels.as_in_context(ctx)
-
-            batch_size = images.shape[0]
-
-            # record computation graph for differentiating with backward()
-            with autograd.record():
-                features = encode(enc, images, labels)
-                images_out = decode(dec, features, labels)
-                L = loss(images_out, images)
-                L.backward()
-
-            enc_trainer.step(batch_size)
-            dec_trainer.step(batch_size)
-
-            metric.update([images], [images_out])
-
-            if (i+1) % 100 == 0:
-                name, mse = metric.get()
-                print('[Epoch {} Batch {}] Training: {}={:.4f}'.format(epoch+1, i+1, name, mse))
-
-        name, mse = metric.get()
-        print('[Epoch {}] Training: {}={:.4f}'.format(epoch+1, name, mse))
-
-        name, test_mse = test(ctx, enc, dec, test_data)
-        print('[Epoch {}] Validation: {}={:.4f}'.format(epoch+1, name, test_mse))
-
-        sess.save_all()
-        print('Model parameters and trainer state saved.')
+    encoder.train()
+    decoder.train()
+    for epoch in range(opt.epochs):
+        print(f"Epoch {epoch+1} training:")
+        mean_ae_loss = train_one_epoch(
+            train_dataloader, encoder, decoder, encoder_opt, decoder_opt, autoenc_loss_func)
+        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
+        save_models({"encoder": encoder, "decoder": decoder}, opt.ckpt_dir)
+        # print(f"Epoch {epoch+1} validation:")
+        # TODO mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder)
+    print("Done!")
 
 
-test_idx = 1
-def test(ctx, enc, dec, test_data):
-    global test_idx
-    metric = mx.metric.MSE()
-    samples = []
-    for images, labels in test_data:
-        features = encode(enc, images, labels)
-        images_out = decode(dec, features, labels)
-        metric.update([images], [images_out])
+def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder,
+                    encoder_opt: optim.Optimizer, decoder_opt: optim.Optimizer,
+                    ae_loss_func, g_loss_factor: float = 0.1):
+    cumulative_ae_loss = 0.0
+    num_batches = 0
 
-        idx = np.random.randint(images.shape[0])
-        samples.append(mx.nd.concat(images[idx], images_out[idx], dim=2)[0].asnumpy())
+    for batch, _ in dataloader:
+        # batch = batch.to(device)  # TODO
+        latent_code = encoder(batch)
+        decoded_batch = decoder(latent_code)
 
-    try:
-        imgdir = '/tmp/mnist'
-        save_images(samples[::2], imgdir, test_idx*1000)
-        test_idx += 1
-        print("test images written to", imgdir)
-    except Exception as e:
-        print("writing images failed:", e)
+        # Update encoder/generator and decoder
+        encoder_opt.zero_grad()
+        decoder_opt.zero_grad()
+        ae_loss = ae_loss_func(decoded_batch, batch)
+        ae_loss.backward(retain_graph=True)
+        encoder_opt.step()
+        decoder_opt.step()
 
-    return metric.get()
+        cumulative_ae_loss += ae_loss.item()
+        num_batches += 1
+
+    mean_ae_loss = cumulative_ae_loss / num_batches
+    return mean_ae_loss
+
+
+def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder):
+    # TODO return avg_autoencoder_loss
+    pass
 
 
 if __name__ == '__main__':

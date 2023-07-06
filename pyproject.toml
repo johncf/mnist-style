@@ -8,25 +8,33 @@ authors = [{name = "John C", email = "john.ch.fr@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
 dependencies = [
-    "mxnet~=1.1",
-    "numpy>=1.13,<1.23",
+    "numpy~=1.23",
     "Pillow~=9.2",
+    "safetensors~=0.3.1",
+]
+optional-dependencies.cpu = [
+    "torch==2.0.1+cpu",
+    "torchvision==0.15.2+cpu",
+]
+optional-dependencies.gpu = [
+    "torch~=2.0.1",
+    "torchvision~=0.15.2",
+]
+optional-dependencies.vis = [
+    "matplotlib~=3.0",
+    "pandas~=2.0",
+    "seaborn~=0.12.0",
+    "notebook~=7.0.0rc2",
+    "scipy~=1.11",
+]
+optional-dependencies.dev = [
+    "pip-tools"
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
 ]
 dynamic = ["version", "description"]
-
-[project.optional-dependencies]
-vis = [
-    "matplotlib~=3.0",
-    "pandas~=1.0",
-    "seaborn~=0.12.0",
-]
-dev = [
-    "pip-tools"
-]
 
 [project.scripts]
 encoder-vis = "mnist_style.tool.encoder_vis:main"

@@ -1,7 +1,10 @@
 data
 pyenv
+dist
 __pycache__
+.ipynb_checkpoints
 *.ckpt
 *.trainer
 *.params
 *.png
+*.safetensors

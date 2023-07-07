@@ -36,6 +36,7 @@ def main():
                         help='MNIST data directory (default: ./data) ' +
                              '(gets created and downloaded to, if doesn\'t exist)')
     opt = parser.parse_args()
+    torch.manual_seed(1234)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -60,16 +61,20 @@ def main():
     # Define loss functions
     autoenc_loss_func = nn.L1Loss()
 
-    encoder.train()
-    decoder.train()
     for epoch in range(opt.epochs):
         print(f"Epoch {epoch+1} training:")
+        encoder.train()
+        decoder.train()
         mean_ae_loss = train_one_epoch(
             train_dataloader, encoder, decoder, encoder_opt, decoder_opt, autoenc_loss_func)
         print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
         save_models({"encoder": encoder, "decoder": decoder}, opt.ckpt_dir)
-        # print(f"Epoch {epoch+1} validation:")
-        # TODO mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder)
+        print(f"Epoch {epoch+1} validation:")
+        encoder.eval()
+        decoder.eval()
+        with torch.no_grad():
+            mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
+        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
     print("Done!")
 
 
@@ -99,9 +104,18 @@ def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder,
     return mean_ae_loss
 
 
-def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder):
-    # TODO return avg_autoencoder_loss
-    pass
+def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, ae_loss_func):
+    cumulative_ae_loss = 0.0
+    num_batches = 0
+
+    for batch, _ in dataloader:
+        latent_code = encoder(batch)
+        decoded_batch = decoder(latent_code)
+        ae_loss = ae_loss_func(decoded_batch, batch)
+        cumulative_ae_loss += ae_loss.item()
+        num_batches += 1
+
+    return cumulative_ae_loss / num_batches
 
 
 if __name__ == '__main__':

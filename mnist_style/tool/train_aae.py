@@ -3,12 +3,14 @@
 import argparse
 import logging
 import math
-import os
+from functools import partial
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from scipy import stats
 from torchvision.datasets import MNIST
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -37,6 +39,7 @@ def main():
                         help='MNIST data directory (default: ./data) ' +
                              '(gets created and downloaded to, if doesn\'t exist)')
     opt = parser.parse_args()
+    torch.manual_seed(1234)
 
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -64,34 +67,38 @@ def main():
     autoenc_loss_func = nn.L1Loss()
     adversarial_loss_func = nn.BCELoss()
 
-    encoder.train()
-    decoder.train()
     discriminator.train()
     for epoch in range(opt.epochs):
-        g_loss_factor = 0.05 * epoch / (opt.epochs - 2)
+        gen_loss_factor = 0.05 * epoch / (opt.epochs - 2)
         print(f"Epoch {epoch+1} training:")
-        mean_ae_loss, mean_g_loss, mean_d_loss = train_one_epoch(
+        encoder.train()
+        decoder.train()
+        mean_ae_loss, mean_dis_fake_loss, mean_dis_real_loss = train_one_epoch(
             train_dataloader, encoder, decoder, discriminator,
             encoder_opt, decoder_opt, discriminator_opt,
-            autoenc_loss_func, adversarial_loss_func, g_loss_factor)
-        true_mean_g_loss = math.nan if g_loss_factor == 0.0 else mean_g_loss/g_loss_factor
-        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
-        print(f"  Average Generator Loss: {mean_g_loss:.4f} ({true_mean_g_loss:.4f} * {g_loss_factor:.3f})")
-        print(f"  Average Discriminator Loss: {mean_d_loss:.4f}")
+            autoenc_loss_func, adversarial_loss_func, gen_loss_factor)
+        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f} (gen factor: {gen_loss_factor:.3f})")
+        print(f"  Average Discriminator Fake Loss: {mean_dis_fake_loss:.4f}")
+        print(f"  Average Discriminator Real Loss: {mean_dis_real_loss:.4f}", flush=True)
         save_models({
             "encoder": encoder, "decoder": decoder, "discriminator": discriminator
         }, opt.ckpt_dir)
-        # print(f"Epoch {epoch+1} validation:")
-        # TODO mean_ae_loss, mean_enc_error = test_one_epoch(test_dataloader, encoder, decoder)
+        print(f"Epoch {epoch+1} validation:")
+        encoder.eval()
+        decoder.eval()
+        with torch.no_grad():
+            mean_ae_loss, median_enc_error = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
+        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
+        print(f"  Median Encoded Distribution Error: {median_enc_error:.4f}", flush=True)
     print("Done!")
 
 
 def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, discriminator: Discriminator,
                     encoder_opt: optim.Optimizer, decoder_opt: optim.Optimizer, discriminator_opt: optim.Optimizer,
-                    ae_loss_func, adv_loss_func, g_loss_factor: float = 0.1):
+                    ae_loss_func, adv_loss_func, gen_loss_factor: float = 0.1, latent_norm_scale: float = 2.):
     cumulative_ae_loss = 0.0
-    cumulative_d_loss = 0.0
-    cumulative_g_loss = 0.0
+    cumulative_dis_fake_loss = 0.0
+    cumulative_dis_real_loss = 0.0
     num_batches = 0
 
     for batch, _ in dataloader:
@@ -102,13 +109,14 @@ def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, 
         # Update discriminator
         discriminator_opt.zero_grad()
         fake_output = discriminator(latent_code)
-        fake_d_loss = adv_loss_func(fake_output, torch.ones_like(fake_output))
-        fake_d_loss.backward(retain_graph=True)
-        real_output = discriminator(torch.randn_like(latent_code) * 2)  # .to(device)
-        real_d_loss = adv_loss_func(real_output, torch.zeros_like(real_output))
-        real_d_loss.backward()
+        dis_fake_loss = adv_loss_func(fake_output, torch.ones_like(fake_output))
+        dis_fake_loss.backward(retain_graph=True)
+        real_output = discriminator(torch.randn_like(latent_code) * latent_norm_scale)
+        dis_real_loss = adv_loss_func(real_output, torch.zeros_like(real_output))
+        dis_real_loss.backward()
         discriminator_opt.step()
-        cumulative_d_loss += fake_d_loss.item() + real_d_loss.item()
+        cumulative_dis_fake_loss += dis_fake_loss.item()
+        cumulative_dis_real_loss += dis_real_loss.item()
 
         # Update encoder/generator and decoder
         encoder_opt.zero_grad()
@@ -116,24 +124,46 @@ def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, 
         ae_loss = ae_loss_func(decoded_batch, batch)
         ae_loss.backward(retain_graph=True)
         fake_output = discriminator(latent_code)  # recompute, as we updated discriminator above
-        fake_g_loss = adv_loss_func(fake_output, torch.zeros_like(fake_output)) * g_loss_factor
-        fake_g_loss.backward()
+        gen_loss = adv_loss_func(fake_output, torch.zeros_like(fake_output)) * gen_loss_factor
+        gen_loss.backward()
         encoder_opt.step()
         decoder_opt.step()
 
         cumulative_ae_loss += ae_loss.item()
-        cumulative_g_loss += fake_g_loss.item()
         num_batches += 1
 
     mean_ae_loss = cumulative_ae_loss / num_batches
-    mean_g_loss = cumulative_g_loss / num_batches
-    mean_d_loss = cumulative_d_loss / num_batches
-    return mean_ae_loss, mean_g_loss, mean_d_loss
+    mean_dis_fake_loss = cumulative_dis_fake_loss / num_batches
+    mean_dis_real_loss = cumulative_dis_real_loss / num_batches
+    return mean_ae_loss, mean_dis_fake_loss, mean_dis_real_loss
 
 
-def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, latent_norm_scale: int = 2):
-    # TODO return avg_autoencoder_loss, encoder_distribution_errors?
-    pass
+def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, ae_loss_func, latent_norm_scale: float = 2.):
+    cumulative_ae_loss = 0.0
+    latent_code_batches = []
+    num_batches = 0
+
+    for batch, _ in dataloader:
+        latent_code = encoder(batch)
+        decoded_batch = decoder(latent_code)
+        ae_loss = ae_loss_func(decoded_batch, batch)
+        cumulative_ae_loss += ae_loss.item()
+        latent_code_batches.append(latent_code.detach().numpy())
+        num_batches += 1
+
+    mean_ae_loss = cumulative_ae_loss / num_batches
+    latent_codes = np.concatenate(latent_code_batches)
+    feat_wise_logps = [distribution_fit_error(latent_codes[:, i], norm_scale=latent_norm_scale)
+                       for i in range(latent_codes.shape[1])]
+    median_feat_enc_error = np.median(feat_wise_logps)
+    return mean_ae_loss, median_feat_enc_error
+
+
+def distribution_fit_error(samples, norm_scale=2) -> float:
+    cdf = partial(stats.norm.cdf, loc=0, scale=norm_scale)
+    ks_test = stats.ks_1samp(samples, cdf)
+    # return ks_test.statistic
+    return -math.log10(ks_test.pvalue) if ks_test.pvalue > 0 else math.inf
 
 
 if __name__ == '__main__':

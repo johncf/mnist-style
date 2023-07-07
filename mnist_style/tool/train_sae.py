@@ -21,10 +21,10 @@ logging.basicConfig(level=logging.DEBUG)
 
 def main():
     parser = argparse.ArgumentParser(description='MNIST Simple Auto-Encoder')
-    parser.add_argument('--batch-size', type=int, default=100, metavar='B',
+    parser.add_argument('--batch-size', type=int, default=64, metavar='B',
                         help='batch size for training and testing (default: 64)')
-    parser.add_argument('--epochs', type=int, default=6, metavar='E',
-                        help='number of epochs to train (default: 6)')
+    parser.add_argument('--epochs', type=int, default=8, metavar='E',
+                        help='number of epochs to train (default: 8)')
     parser.add_argument('--lr', type=float, default=4e-4,
                         help='learning rate with adam optimizer (default: 0.0004)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',

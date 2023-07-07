@@ -22,11 +22,26 @@ also provide the encoder with the label.
 
 ## Setup
 
-```
-$ python3 -m venv pyenv
-$ source pyenv/bin/activate
-$ pip install '.[cpu]' --extra-index-url https://download.pytorch.org/whl/cpu
-```
+1.  Create a virtual environment:
+
+    ```
+    $ python3 -m venv pyenv
+    $ source pyenv/bin/activate
+    ```
+
+2.  Install the package with one of `cpu` or `gpu` extra.
+    Note: using `gpu` installs the default `torch` package from PyPI, but GPU training is not supported yet, and the package is an order of magnitude bigger than the `cpu` version.
+
+    ```
+    $ pip install '.[cpu]' --extra-index-url https://download.pytorch.org/whl/cpu
+    ```
+
+    Alternatively, you may install from `requirements.txt` (containing CPU version of `torch`):
+
+    ```
+    $ pip install -r requirements.txt
+    $ pip install .
+    ```
 
 ## Usage
 
@@ -45,33 +60,26 @@ Model parameters and trainer state saved.
 
 ## Feature Space Visualisation
 
-If you're interested in visualizing the feature space which your trained
-encoder maps to, there's a script to do just that.
+If you're interested in visualizing the feature space which your trained encoder maps to, there's a notebook to do that.
 
-For that, we first need to install the visualisation requirements.
+We first need to install the visualisation requirements.
 
 ```
 $ pip install -r requirements-vis.txt
 ```
 
-Executing the following script creates an encoder model with saved parameters,
-runs it on 500 test images (by default), and displays the feature space as a
-scatter matrix.
+Open `vis.ipynb` in JupyterLab, modify parameters if needed and run all cells.
 
 ```
-$ encoder-vis --feature-size 4
+$ jupyter lab
 ```
 
 The following image is the output from an auto-encoder model that was trained
-with the simple approach ([`mnist-sae.py`](./mnist-sae.py)).
+with the simple approach (`train-sae` script).
 
 [![sae-sample](https://i.imgur.com/fBaF6tcl.png)](https://i.imgur.com/fBaF6tc.png)
 
-_(click to enlarge)_
-
 And below is the same from an adversarially trained auto-encoder model
-([`mnist-aae.py`](./mnist-aae.py)).
+(`mnist-aae` script).
 
 [![aae-sample](https://i.imgur.com/pI3iQyBl.png)](https://i.imgur.com/pI3iQyB.png)
-
-_(click to enlarge)_

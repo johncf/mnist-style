@@ -56,7 +56,7 @@ def main():
 
     # Define optimizers
     encoder_opt = optim.AdamW(encoder.parameters(), lr=opt.lr)
-    decoder_opt = optim.Adam(decoder.parameters(), lr=opt.lr)
+    decoder_opt = optim.AdamW(decoder.parameters(), lr=opt.lr)
 
     # Define loss functions
     autoenc_loss_func = nn.L1Loss()

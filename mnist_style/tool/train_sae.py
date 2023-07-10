@@ -2,8 +2,8 @@
 
 import argparse
 import logging
-import math
-import os
+from dataclasses import dataclass
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -26,7 +26,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=8, metavar='E',
                         help='number of epochs to train (default: 8)')
     parser.add_argument('--lr', type=float, default=4e-4,
-                        help='learning rate with adam optimizer (default: 0.0004)')
+                        help='learning rate with adam optimizer (default: 4e-4)')
     parser.add_argument('--feature-size', type=int, default=8, metavar='N',
                         help='dimensions of the latent feature vector (default: 8)')
     parser.add_argument('--ckpt-dir', default='./pt-sae', metavar='ckpt',
@@ -47,75 +47,91 @@ def main():
     test_dataset = MNIST(root=opt.data_dir, train=False, download=False, transform=transform)
 
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=400, shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=4 * opt.batch_size, shuffle=False)
 
     # Create model instances
     latent_dim = opt.feature_size
     encoder = Encoder(latent_dim)
     decoder = Decoder(latent_dim)
 
-    # Define optimizers
-    encoder_opt = optim.AdamW(encoder.parameters(), lr=opt.lr)
-    decoder_opt = optim.AdamW(decoder.parameters(), lr=opt.lr)
-
-    # Define loss functions
-    autoenc_loss_func = nn.L1Loss()
+    trainer = SAETrainer(
+        encoder=encoder,
+        decoder=decoder,
+        # Define optimizers
+        encoder_opt=optim.AdamW(encoder.parameters(), lr=opt.lr),
+        decoder_opt=optim.AdamW(decoder.parameters(), lr=opt.lr),
+        # Define loss functions
+        autoenc_loss_func=nn.L1Loss(),
+    )
 
     for epoch in range(opt.epochs):
         print(f"Epoch {epoch+1} training:")
         encoder.train()
         decoder.train()
-        mean_ae_loss = train_one_epoch(
-            train_dataloader, encoder, decoder, encoder_opt, decoder_opt, autoenc_loss_func)
-        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
-        save_models({"encoder": encoder, "decoder": decoder}, opt.ckpt_dir)
+        mean_ae_loss = trainer.train_one_epoch(train_dataloader)
+        print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
+        trainer.save_models(opt.ckpt_dir)
         print(f"Epoch {epoch+1} validation:")
         encoder.eval()
         decoder.eval()
-        mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
-        print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
+        mean_ae_loss = trainer.test_one_epoch(test_dataloader)
+        print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
     print("Done!")
 
 
-def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder,
-                    encoder_opt: optim.Optimizer, decoder_opt: optim.Optimizer,
-                    ae_loss_func, g_loss_factor: float = 0.1):
-    cumulative_ae_loss = 0.0
-    num_batches = 0
+@dataclass(slots=True)
+class SAETrainer:
+    encoder: Encoder
+    decoder: Decoder
+    encoder_opt: optim.Optimizer
+    decoder_opt: optim.Optimizer
+    autoenc_loss_func: Callable
 
-    for batch, _ in dataloader:
-        # batch = batch.to(device)  # TODO
-        latent_code = encoder(batch)
-        decoded_batch = decoder(latent_code)
+    def train_one_epoch(self, dataloader: DataLoader) -> float:
+        cumulative_ae_loss = 0.0
+        num_samples = 0
 
-        # Update encoder/generator and decoder
-        encoder_opt.zero_grad()
-        decoder_opt.zero_grad()
-        ae_loss = ae_loss_func(decoded_batch, batch)
-        ae_loss.backward(retain_graph=True)
-        encoder_opt.step()
-        decoder_opt.step()
+        self.encoder.train()
+        self.decoder.train()
+        for batch, label in dataloader:
+            # batch = batch.to(device)  # TODO
+            latent_code = self.encoder(batch)
+            decoded_batch = self.decoder(latent_code)
 
-        cumulative_ae_loss += ae_loss.item()
-        num_batches += 1
+            # Update encoder/generator and decoder
+            self.encoder_opt.zero_grad()
+            self.decoder_opt.zero_grad()
+            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
+            ae_loss.backward()
+            self.encoder_opt.step()
+            self.decoder_opt.step()
+            cumulative_ae_loss += ae_loss.item() * len(label)
 
-    mean_ae_loss = cumulative_ae_loss / num_batches
-    return mean_ae_loss
+            num_samples += len(label)
 
+        return cumulative_ae_loss / num_samples
 
-@torch.no_grad()
-def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, ae_loss_func):
-    cumulative_ae_loss = 0.0
-    num_batches = 0
+    @torch.inference_mode()
+    def test_one_epoch(self, dataloader: DataLoader) -> float:
+        cumulative_ae_loss = 0.0
+        num_samples = 0
 
-    for batch, _ in dataloader:
-        latent_code = encoder(batch)
-        decoded_batch = decoder(latent_code)
-        ae_loss = ae_loss_func(decoded_batch, batch)
-        cumulative_ae_loss += ae_loss.item()
-        num_batches += 1
+        self.encoder.eval()
+        self.decoder.eval()
+        for batch, label in dataloader:
+            latent_code = self.encoder(batch)
+            decoded_batch = self.decoder(latent_code)
+            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
+            cumulative_ae_loss += ae_loss.item() * len(label)
+            num_samples += len(label)
 
-    return cumulative_ae_loss / num_batches
+        return cumulative_ae_loss / num_samples
+
+    def save_models(self, ckpt_dir):
+        save_models({
+            "encoder": self.encoder,
+            "decoder": self.decoder,
+        }, ckpt_dir)
 
 
 if __name__ == '__main__':

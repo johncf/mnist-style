@@ -65,7 +65,7 @@ def main():
 
     # Define loss functions
     autoenc_loss_func = nn.L1Loss()
-    adversarial_loss_func = nn.BCELoss()
+    adversarial_loss_func = nn.BCEWithLogitsLoss()
 
     discriminator.train()
     for epoch in range(opt.epochs):
@@ -86,8 +86,7 @@ def main():
         print(f"Epoch {epoch+1} validation:")
         encoder.eval()
         decoder.eval()
-        with torch.no_grad():
-            mean_ae_loss, median_enc_error = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
+        mean_ae_loss, median_enc_error = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
         print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
         print(f"  Median Encoded Distribution Error: {median_enc_error:.4f}", flush=True)
     print("Done!")
@@ -138,6 +137,7 @@ def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, 
     return mean_ae_loss, mean_dis_fake_loss, mean_dis_real_loss
 
 
+@torch.no_grad()
 def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, ae_loss_func, latent_norm_scale: float = 2.):
     cumulative_ae_loss = 0.0
     latent_code_batches = []

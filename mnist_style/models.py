@@ -47,7 +47,7 @@ class Discriminator(nn.Module):
             nn.Linear(64, 8),
             nn.ReLU(),
             nn.Linear(8, 1),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),  # since we use BCEWithLogitsLoss
         )
 
     def forward(self, x):

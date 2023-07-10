@@ -72,8 +72,7 @@ def main():
         print(f"Epoch {epoch+1} validation:")
         encoder.eval()
         decoder.eval()
-        with torch.no_grad():
-            mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
+        mean_ae_loss = test_one_epoch(test_dataloader, encoder, decoder, autoenc_loss_func)
         print(f"  Average AutoEnc Loss: {mean_ae_loss:.4f}")
     print("Done!")
 
@@ -104,6 +103,7 @@ def train_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder,
     return mean_ae_loss
 
 
+@torch.no_grad()
 def test_one_epoch(dataloader: DataLoader, encoder: Encoder, decoder: Decoder, ae_loss_func):
     cumulative_ae_loss = 0.0
     num_batches = 0

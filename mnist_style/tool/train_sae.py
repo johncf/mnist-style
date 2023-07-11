@@ -94,7 +94,7 @@ class SAETrainer:
         self.encoder.train()
         self.decoder.train()
         for batch, label in dataloader:
-            # batch = batch.to(device)  # TODO
+            batch_size = len(label)
             latent_code = self.encoder(batch)
             decoded_batch = self.decoder(latent_code)
 
@@ -105,9 +105,9 @@ class SAETrainer:
             ae_loss.backward()
             self.encoder_opt.step()
             self.decoder_opt.step()
-            cumulative_ae_loss += ae_loss.item() * len(label)
+            cumulative_ae_loss += ae_loss.item() * batch_size
 
-            num_samples += len(label)
+            num_samples += batch_size
 
         return cumulative_ae_loss / num_samples
 
@@ -119,11 +119,12 @@ class SAETrainer:
         self.encoder.eval()
         self.decoder.eval()
         for batch, label in dataloader:
+            batch_size = len(label)
             latent_code = self.encoder(batch)
             decoded_batch = self.decoder(latent_code)
             ae_loss = self.autoenc_loss_func(decoded_batch, batch)
-            cumulative_ae_loss += ae_loss.item() * len(label)
-            num_samples += len(label)
+            cumulative_ae_loss += ae_loss.item() * batch_size
+            num_samples += batch_size
 
         return cumulative_ae_loss / num_samples
 

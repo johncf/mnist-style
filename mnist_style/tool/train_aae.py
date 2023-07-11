@@ -126,36 +126,34 @@ class AAETrainer:
         self.decoder.train()
         self.discriminator.train()
         for batch, label in dataloader:
-            # batch = batch.to(device)  # TODO
+            batch_size = len(label)
             latent_code = self.encoder(batch)
             decoded_batch = self.decoder(latent_code)
 
             # Update discriminator
-            self.discriminator_opt.zero_grad()
             fake_output = self.discriminator(latent_code.detach())
             dis_fake_loss = self.advers_loss_func(fake_output, torch.ones_like(fake_output))
             real_output = self.discriminator(torch.randn_like(latent_code) * self.latent_norm_scale)
             dis_real_loss = self.advers_loss_func(real_output, torch.zeros_like(real_output))
+            self.discriminator_opt.zero_grad()
             (dis_fake_loss + dis_real_loss).backward()
             self.discriminator_opt.step()
-            cumulative_dis_fake_loss += dis_fake_loss.item() * len(label)
-            cumulative_dis_real_loss += dis_real_loss.item() * len(label)
+            cumulative_dis_fake_loss += dis_fake_loss.item() * batch_size
+            cumulative_dis_real_loss += dis_real_loss.item() * batch_size
 
             # Update encoder/generator and decoder
+            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
+            fake_output = self.discriminator(latent_code)  # recompute without detaching
+            gen_loss = self.advers_loss_func(fake_output, torch.zeros_like(fake_output))
             self.encoder_opt.zero_grad()
             self.decoder_opt.zero_grad()
-            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
-            ae_loss.backward(retain_graph=True)
-            fake_output = self.discriminator(latent_code)  # recompute, as we updated discriminator above
-            gen_loss = self.advers_loss_func(fake_output, torch.zeros_like(fake_output))
-            cumulative_gen_loss += gen_loss.item() * len(label)
-            gen_loss *= gen_loss_factor
-            gen_loss.backward()
+            (ae_loss + gen_loss * gen_loss_factor).backward()
             self.encoder_opt.step()
             self.decoder_opt.step()
-            cumulative_ae_loss += ae_loss.item() * len(label)
+            cumulative_gen_loss += gen_loss.item() * batch_size
+            cumulative_ae_loss += ae_loss.item() * batch_size
 
-            num_samples += len(label)
+            num_samples += batch_size
 
         return AAETrainMetrics(
             mean_autoenc_loss=cumulative_ae_loss / num_samples,
@@ -173,12 +171,13 @@ class AAETrainer:
         self.encoder.eval()
         self.decoder.eval()
         for batch, label in dataloader:
+            batch_size = len(label)
             latent_code = self.encoder(batch)
             decoded_batch = self.decoder(latent_code)
             ae_loss = self.autoenc_loss_func(decoded_batch, batch)
-            cumulative_ae_loss += ae_loss.item() * len(label)
+            cumulative_ae_loss += ae_loss.item() * batch_size
             latent_code_batches.append(latent_code.detach().numpy())
-            num_samples += len(label)
+            num_samples += batch_size
 
         latent_codes = np.concatenate(latent_code_batches)
         feat_wise_fit_errors = [distribution_fit_error(latent_codes[:, i], norm_scale=self.latent_norm_scale)

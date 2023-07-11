@@ -132,12 +132,11 @@ class AAETrainer:
 
             # Update discriminator
             self.discriminator_opt.zero_grad()
-            fake_output = self.discriminator(latent_code)
+            fake_output = self.discriminator(latent_code.detach())
             dis_fake_loss = self.advers_loss_func(fake_output, torch.ones_like(fake_output))
-            dis_fake_loss.backward(retain_graph=True)
             real_output = self.discriminator(torch.randn_like(latent_code) * self.latent_norm_scale)
             dis_real_loss = self.advers_loss_func(real_output, torch.zeros_like(real_output))
-            dis_real_loss.backward()
+            (dis_fake_loss + dis_real_loss).backward()
             self.discriminator_opt.step()
             cumulative_dis_fake_loss += dis_fake_loss.item() * len(label)
             cumulative_dis_real_loss += dis_real_loss.item() * len(label)

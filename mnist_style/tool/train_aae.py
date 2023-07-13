@@ -3,9 +3,9 @@
 import argparse
 import logging
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable
 
 import numpy as np
 import torch
@@ -18,28 +18,17 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from mnist_style.models import Encoder, Decoder, Discriminator
-from mnist_style.persistence import load_models, save_models
+from mnist_style.persistence import save_models
 
+from .common import cli_parser_add_arguments
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def main():
     parser = argparse.ArgumentParser(description='MNIST Adverserial Auto-Encoder')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='B',
-                        help='batch size for training and testing (default: 64)')
-    parser.add_argument('--epochs', type=int, default=12, metavar='E',
-                        help='number of epochs to train (default: 12)')
-    parser.add_argument('--lr', type=float, default=4e-4,
-                        help='learning rate with adam optimizer (default: 4e-4)')
-    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='dimensions of the latent feature vector (default: 8)')
-    parser.add_argument('--ckpt-dir', default='./pt-aae', metavar='ckpt',
-                        help='training session directory (default: ./pt-aae) ' +
-                             'for storing model parameters and trainer states')
-    parser.add_argument('--data-dir', default='./data', metavar='data',
-                        help='MNIST data directory (default: ./data) ' +
-                             '(gets created and downloaded to, if doesn\'t exist)')
+    cli_parser_add_arguments(
+        parser, batch_size=64, epochs=12, lr=4e-4, feat_size=8, ckpt_dir='./pt-aae')
     opt = parser.parse_args()
     torch.manual_seed(1235)
 
@@ -55,10 +44,9 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=4 * opt.batch_size, shuffle=False)
 
     # Create model instances
-    latent_dim = opt.feature_size
-    encoder = Encoder(latent_dim)
-    decoder = Decoder(latent_dim)
-    discriminator = Discriminator(latent_dim)
+    encoder = Encoder(opt.feat_size)
+    decoder = Decoder(opt.feat_size)
+    discriminator = Discriminator(opt.feat_size)
 
     trainer = AAETrainer(
         encoder=encoder,
@@ -111,11 +99,11 @@ class AAETrainer:
     encoder_opt: optim.Optimizer
     decoder_opt: optim.Optimizer
     discriminator_opt: optim.Optimizer
-    autoenc_loss_func: Callable
-    advers_loss_func: Callable
+    autoenc_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    advers_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     latent_norm_scale: float = 2.
 
-    def train_one_epoch(self, dataloader: DataLoader, gen_loss_factor: float = 0.1) -> AAETrainMetrics:
+    def train_one_epoch(self, dataloader: DataLoader, gen_loss_factor=0.1) -> AAETrainMetrics:
         cumulative_ae_loss = 0.0
         cumulative_gen_loss = 0.0
         cumulative_dis_fake_loss = 0.0
@@ -180,11 +168,13 @@ class AAETrainer:
             num_samples += batch_size
 
         latent_codes = np.concatenate(latent_code_batches)
-        feat_wise_fit_errors = [distribution_fit_error(latent_codes[:, i], norm_scale=self.latent_norm_scale)
-                                for i in range(latent_codes.shape[1])]
+        feat_wise_fit_errors = [
+            distribution_fit_error(latent_codes[:, i], norm_scale=self.latent_norm_scale)
+            for i in range(latent_codes.shape[1])
+        ]
         return AAETestMetrics(
             mean_autoenc_loss=cumulative_ae_loss / num_samples,
-            median_feat_distrib_error=np.median(feat_wise_fit_errors),
+            median_feat_distrib_error=float(np.median(feat_wise_fit_errors)),
         )
 
     def save_models(self, ckpt_dir):

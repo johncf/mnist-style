@@ -22,13 +22,15 @@ optional-dependencies.gpu = [
     "torchvision~=0.15.2",
 ]
 optional-dependencies.vis = [
+    "jupyterlab~=4.0",
     "matplotlib~=3.0",
     "pandas~=2.0",
     "seaborn~=0.12.0",
-    "jupyterlab~=4.0",
 ]
 optional-dependencies.dev = [
-    "pip-tools"
+    "flake8",
+    "mypy",
+    "pip-tools",
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",
@@ -43,3 +45,6 @@ train-sae = "mnist_style.tool.train_sae:main"
 
 [project.urls]
 Home = "https://github.com/johncf/mnist-style"
+
+[tool.mypy]
+ignore_missing_imports = true

@@ -2,8 +2,8 @@
 
 import argparse
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -14,27 +14,17 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 
 from mnist_style.models import Encoder, Decoder
-from mnist_style.persistence import load_models, save_models
+from mnist_style.persistence import save_models
+
+from .common import cli_parser_add_arguments
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def main():
     parser = argparse.ArgumentParser(description='MNIST Simple Auto-Encoder')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='B',
-                        help='batch size for training and testing (default: 64)')
-    parser.add_argument('--epochs', type=int, default=8, metavar='E',
-                        help='number of epochs to train (default: 8)')
-    parser.add_argument('--lr', type=float, default=4e-4,
-                        help='learning rate with adam optimizer (default: 4e-4)')
-    parser.add_argument('--feature-size', type=int, default=8, metavar='N',
-                        help='dimensions of the latent feature vector (default: 8)')
-    parser.add_argument('--ckpt-dir', default='./pt-sae', metavar='ckpt',
-                        help='training session directory (default: ./pt-sae) ' +
-                             'for storing model parameters and trainer states')
-    parser.add_argument('--data-dir', default='./data', metavar='data',
-                        help='MNIST data directory (default: ./data) ' +
-                             '(gets created and downloaded to, if doesn\'t exist)')
+    cli_parser_add_arguments(
+        parser, batch_size=64, epochs=10, lr=4e-4, feat_size=8, ckpt_dir='./pt-sae')
     opt = parser.parse_args()
     torch.manual_seed(1234)
 
@@ -50,9 +40,8 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=4 * opt.batch_size, shuffle=False)
 
     # Create model instances
-    latent_dim = opt.feature_size
-    encoder = Encoder(latent_dim)
-    decoder = Decoder(latent_dim)
+    encoder = Encoder(opt.feat_size)
+    decoder = Decoder(opt.feat_size)
 
     trainer = SAETrainer(
         encoder=encoder,
@@ -85,7 +74,7 @@ class SAETrainer:
     decoder: Decoder
     encoder_opt: optim.Optimizer
     decoder_opt: optim.Optimizer
-    autoenc_loss_func: Callable
+    autoenc_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
 
     def train_one_epoch(self, dataloader: DataLoader) -> float:
         cumulative_ae_loss = 0.0

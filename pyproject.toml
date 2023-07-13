@@ -29,6 +29,7 @@ optional-dependencies.vis = [
 ]
 optional-dependencies.dev = [
     "flake8",
+    "isort",
     "mypy",
     # "pip-tools",  # for pip-compile
 ]

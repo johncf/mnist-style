@@ -8,12 +8,11 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
-from torchvision.datasets import MNIST
-from torchvision import transforms
 from torch.utils.data import DataLoader
+from torchvision import transforms
+from torchvision.datasets import MNIST
 
-from mnist_style.models import Encoder, Decoder
+from mnist_style.models import Decoder, Encoder
 from mnist_style.persistence import save_models
 
 from .common import cli_parser_add_arguments

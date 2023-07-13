@@ -16,6 +16,8 @@ flake8==6.0.0
     # via mnist_style (pyproject.toml)
 idna==3.4
     # via requests
+isort==5.12.0
+    # via mnist_style (pyproject.toml)
 jinja2==3.1.2
     # via torch
 markupsafe==2.1.3

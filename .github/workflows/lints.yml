@@ -24,7 +24,7 @@ jobs:
         flake8 .
     - name: Analysing the code with isort
       run: |
-        isort .
+        isort --check .
     - name: Analysing the code with mypy
       run: |
         mypy .

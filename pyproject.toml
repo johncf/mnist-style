@@ -30,7 +30,7 @@ optional-dependencies.vis = [
 optional-dependencies.dev = [
     "flake8",
     "mypy",
-    "pip-tools",
+    # "pip-tools",  # for pip-compile
 ]
 classifiers = [
     "License :: OSI Approved :: MIT License",

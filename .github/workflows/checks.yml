@@ -1,0 +1,51 @@
+name: checks
+
+on: [push]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install '.[cpu]' --extra-index-url https://download.pytorch.org/whl/cpu
+    - name: Display help from training scripts
+      run: |
+        train-aae --help
+        train-sae --help
+    - name: Run simple training
+      run: |
+        train-aae --epochs 1 --ckpt-dir ./pt-aae
+        test -f pt-aae/encoder.safetensors
+        test -f pt-aae/decoder.safetensors
+        test -f pt-aae/discriminator.safetensors
+        train-sae --epochs 1 --ckpt-dir ./pt-sae
+        test -f pt-sae/encoder.safetensors
+        test -f pt-sae/decoder.safetensors
+  tox:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v3
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox
+    - name: Run tox
+      run: |
+        tox

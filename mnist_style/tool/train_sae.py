@@ -2,8 +2,6 @@
 
 import argparse
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
 
 import torch
 from torch import nn, optim
@@ -12,7 +10,7 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 
 from mnist_style.models import Decoder, Encoder
-from mnist_style.persistence import save_models
+from mnist_style.trainer import SAETrainer
 
 from .common import cli_parser_add_arguments
 
@@ -64,62 +62,6 @@ def main():
         mean_ae_loss = trainer.test_one_epoch(test_dataloader)
         print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
     print("Done!")
-
-
-@dataclass(slots=True)
-class SAETrainer:
-    encoder: Encoder
-    decoder: Decoder
-    encoder_opt: optim.Optimizer
-    decoder_opt: optim.Optimizer
-    autoenc_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
-
-    def train_one_epoch(self, dataloader: DataLoader) -> float:
-        cumulative_ae_loss = 0.0
-        num_samples = 0
-
-        self.encoder.train()
-        self.decoder.train()
-        for batch, label in dataloader:
-            batch_size = len(label)
-            latent_code = self.encoder(batch)
-            decoded_batch = self.decoder(latent_code)
-
-            # Update encoder/generator and decoder
-            self.encoder_opt.zero_grad()
-            self.decoder_opt.zero_grad()
-            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
-            ae_loss.backward()
-            self.encoder_opt.step()
-            self.decoder_opt.step()
-            cumulative_ae_loss += ae_loss.item() * batch_size
-
-            num_samples += batch_size
-
-        return cumulative_ae_loss / num_samples
-
-    @torch.inference_mode()
-    def test_one_epoch(self, dataloader: DataLoader) -> float:
-        cumulative_ae_loss = 0.0
-        num_samples = 0
-
-        self.encoder.eval()
-        self.decoder.eval()
-        for batch, label in dataloader:
-            batch_size = len(label)
-            latent_code = self.encoder(batch)
-            decoded_batch = self.decoder(latent_code)
-            ae_loss = self.autoenc_loss_func(decoded_batch, batch)
-            cumulative_ae_loss += ae_loss.item() * batch_size
-            num_samples += batch_size
-
-        return cumulative_ae_loss / num_samples
-
-    def save_models(self, ckpt_dir):
-        save_models({
-            "encoder": self.encoder,
-            "decoder": self.decoder,
-        }, ckpt_dir)
 
 
 if __name__ == '__main__':

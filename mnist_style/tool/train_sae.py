@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import time
 
 import torch
 from torch import nn, optim
@@ -51,16 +52,17 @@ def main():
 
     for epoch in range(opt.epochs):
         print(f"Epoch {epoch+1} training:")
-        encoder.train()
-        decoder.train()
+        t_start = time.time()
         mean_ae_loss = trainer.train_one_epoch(train_dataloader)
+        t_end = time.time()
         print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
         trainer.save_models(opt.ckpt_dir)
         print(f"Epoch {epoch+1} validation:")
-        encoder.eval()
-        decoder.eval()
+        v_start = time.time()
         mean_ae_loss = trainer.test_one_epoch(test_dataloader)
+        v_end = time.time()
         print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
+        print(f"[time] training: {t_end - t_start:.1f}s, validation: {v_end - v_start:.1f}s")
     print("Done!")
 
 

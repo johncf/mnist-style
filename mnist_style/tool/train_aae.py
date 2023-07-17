@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import time
 
 import torch
 from torch import nn, optim
@@ -56,16 +57,21 @@ def main():
     for epoch in range(opt.epochs):
         gen_loss_factor = 0.1 * max(0, epoch - 1) / (opt.epochs - 2)
         print(f"Epoch {epoch+1} training:", flush=True)
+        t_start = time.time()
         train_metrics = trainer.train_one_epoch(train_dataloader, gen_loss_factor)
+        t_end = time.time()
         print(f"  Mean AutoEncoder Loss: {train_metrics.mean_autoenc_loss:.4f}")
         print(f"  Mean Generator Loss: {train_metrics.mean_gener_loss:.4f} * {gen_loss_factor:.3f}")
         print(f"  Mean Discriminator Fake Loss: {train_metrics.mean_discr_fake_loss:.4f}")
         print(f"  Mean Discriminator Real Loss: {train_metrics.mean_discr_real_loss:.4f}")
         trainer.save_models(opt.ckpt_dir)
         print(f"Epoch {epoch+1} validation:", flush=True)
+        v_start = time.time()
         test_metrics = trainer.test_one_epoch(test_dataloader)
+        v_end = time.time()
         print(f"  Mean AutoEncoder Loss: {test_metrics.mean_autoenc_loss:.4f}")
         print(f"  Median Encoded Distribution Error: {test_metrics.median_feat_distrib_error:.4f}")
+        print(f"[time] training: {t_end - t_start:.1f}s, validation: {v_end - v_start:.1f}s")
     print("Done!")
 
 

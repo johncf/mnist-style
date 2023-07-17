@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 
 class ConvBlock(nn.Sequential):
@@ -12,30 +13,30 @@ class ConvBlock(nn.Sequential):
 
 
 class Encoder(nn.Module):
-    def __init__(self, latent_dim):
+    def __init__(self, num_features: int):
         super().__init__()
         self._seq = nn.Sequential(
             ConvBlock(1, 16, kernel_size=5, stride=2, padding=2, norm_groups=4),
             ConvBlock(16, 32, kernel_size=3, stride=1, padding=1, norm_groups=8),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             nn.Flatten(),
-            nn.Linear(32 * 7 * 7, latent_dim)
+            nn.Linear(32 * 7 * 7, num_features)
         )
 
-    def forward(self, x):
-        return self._seq(x)
+    def forward(self, batch: Tensor) -> Tensor:
+        return self._seq(batch)
 
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim):
+    def __init__(self, num_features: int):
         super().__init__()
-        self.fc = nn.Linear(latent_dim, 32 * 7 * 7)
+        self.fc = nn.Linear(num_features, 32 * 7 * 7)
         self.conv1 = ConvBlock(32, 32, kernel_size=3, stride=1, padding=1, norm_groups=8)
         self.conv2 = ConvBlock(32, 4, kernel_size=3, stride=1, padding=1, norm_groups=2)
         self.conv3 = nn.Conv2d(4, 1, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, x):
-        x = self.fc(x)
+    def forward(self, batch: Tensor) -> Tensor:
+        x = self.fc(batch)
         x = x.view(-1, 32, 7, 7)
         x = F.interpolate(x, scale_factor=2)
         x = self.conv1(x)
@@ -46,10 +47,10 @@ class Decoder(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, latent_dim):
+    def __init__(self, num_features: int):
         super().__init__()
         self._seq = nn.Sequential(
-            nn.Linear(latent_dim, 64),
+            nn.Linear(num_features, 64),
             nn.ReLU(),
             nn.Linear(64, 8),
             nn.ReLU(),
@@ -57,5 +58,5 @@ class Discriminator(nn.Module):
             # nn.Sigmoid(),  # since we use BCEWithLogitsLoss
         )
 
-    def forward(self, x):
-        return self._seq(x)
+    def forward(self, batch: Tensor) -> Tensor:
+        return self._seq(batch)

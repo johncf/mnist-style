@@ -43,3 +43,5 @@ Home = "https://github.com/johncf/mnist-style"
 
 [tool.mypy]
 ignore_missing_imports = true
+
+# flake8 config in tox.ini

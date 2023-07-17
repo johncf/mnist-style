@@ -27,12 +27,6 @@ optional-dependencies.vis = [
     "pandas~=2.0",
     "seaborn~=0.12.0",
 ]
-optional-dependencies.dev = [
-    "flake8",
-    "isort",
-    "mypy",
-    # "pip-tools",  # for pip-compile
-]
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -49,3 +43,5 @@ Home = "https://github.com/johncf/mnist-style"
 
 [tool.mypy]
 ignore_missing_imports = true
+
+# flake8 config in tox.ini

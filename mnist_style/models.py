@@ -1,3 +1,6 @@
+from typing import Optional
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
@@ -44,6 +47,39 @@ class Decoder(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         return x
+
+
+class ClassifyingAutoEncoder(nn.Module):
+    def __init__(self, num_classes: int, num_features: int):
+        super().__init__()
+        self.encoder = Encoder(num_classes + num_features)
+        self.decoder = Decoder(num_classes + num_features)
+        self.num_classes = num_classes
+
+    def forward(
+        self, batch: Tensor, class_labels: Optional[Tensor] = None
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        class_logits, extra_feats = self.forward_encoder(batch)
+        # we don't want to backpropagate from decoder to encoder through class logits,
+        # as we don't want information to flow this way; so use detached logits
+        detached_logits = class_logits.detach()
+        if class_labels is not None:  # boost true labels during training
+            detached_logits = detached_logits.clone()  # clone before in-place modification
+            batch_indices = torch.arange(batch.shape[0])
+            max_logits = torch.max(detached_logits, dim=1)[0]
+            detached_logits[batch_indices, class_labels] = max_logits + 1
+        decoded_batch = self.forward_decoder(detached_logits, extra_feats)
+        return class_logits, extra_feats, decoded_batch
+
+    def forward_encoder(self, batch: Tensor) -> tuple[Tensor, Tensor]:
+        latent_code = self.encoder(batch)
+        class_logits, extra_feats = latent_code.split(self.num_classes, dim=1)
+        return class_logits, extra_feats
+
+    def forward_decoder(self, class_logits: Tensor, extra_feats: Tensor) -> Tensor:
+        class_probabilities = F.softmax(class_logits, dim=1)
+        decodable_latent_code = torch.cat((class_probabilities, extra_feats), dim=1)
+        return self.decoder(decodable_latent_code)
 
 
 class Discriminator(nn.Module):

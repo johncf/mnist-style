@@ -15,9 +15,9 @@ also provide the encoder with the label.
 - [x] Simple auto-encoder
 - [x] A script to visualize latent feature-space (style-space).
 - [x] Adversarial auto-encoder to fit the style-space into a Gaussian distribution.
-- [ ] Make Encoder a digit-classifier!
-- [ ] A script to generate images of all digits from a random style-vector.
-- [ ] Simple CI pipeline
+- [x] Make Encoder a digit-classifier!
+- [x] Generate images of digits from a random style-vector (see `vis.ipynb`)
+- [x] Simple CI pipeline
 - [ ] GPU support
 
 ## Setup

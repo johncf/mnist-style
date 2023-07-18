@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, TypeAlias
+from typing import Callable, Generic, TypeAlias, TypeVar
 
 import numpy as np
 import torch
@@ -9,6 +9,7 @@ from scipy import stats
 from torch import Tensor, nn, optim
 from torch.utils.data import DataLoader
 
+from mnist_style.models import ClassifyingAutoEncoder, Discriminator
 from mnist_style.persistence import save_models
 
 
@@ -28,12 +29,16 @@ class TestMetrics:
     median_feat_distrib_error: float = 0.
 
 
+ModelTy = TypeVar('ModelTy', bound=nn.Module)
+LossFunction: TypeAlias = Callable[[Tensor, Tensor], Tensor]
+
+
 @dataclass(slots=True)
-class ModelOptHelper:
-    model: nn.Module
+class ModelOptHelper(Generic[ModelTy]):
+    model: ModelTy
     opt: optim.Optimizer
 
-    def __init__(self, model: nn.Module, *, lr: float, optim_cls=optim.AdamW):
+    def __init__(self, model: ModelTy, *, lr: float, optim_cls=optim.AdamW):
         self.model = model
         self.opt = optim_cls(model.parameters(), lr=lr)
 
@@ -47,12 +52,9 @@ class ModelOptHelper:
         return self.model.eval()
 
 
-LossFunction: TypeAlias = Callable[[Tensor, Tensor], Tensor]
-
-
 @dataclass(slots=True, kw_only=True)
 class SimpleTrainer:
-    autoencoder: ModelOptHelper
+    autoencoder: ModelOptHelper[ClassifyingAutoEncoder]
     autoenc_loss_func: LossFunction
     classif_loss_func: LossFunction
     latent_norm_scale: float = 2.
@@ -125,7 +127,7 @@ class SimpleTrainer:
 
 @dataclass(slots=True, kw_only=True)
 class AdversarialTrainer(SimpleTrainer):
-    discriminator: ModelOptHelper
+    discriminator: ModelOptHelper[Discriminator]
     advers_loss_func: LossFunction
 
     def train_one_epoch(self, dataloader: DataLoader, gen_loss_factor=0.1) -> TrainMetrics:

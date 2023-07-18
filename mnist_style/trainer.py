@@ -1,15 +1,14 @@
 import math
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable
+from typing import Callable, TypeAlias
 
 import numpy as np
 import torch
 from scipy import stats
-from torch import optim
+from torch import Tensor, nn, optim
 from torch.utils.data import DataLoader
 
-from mnist_style.models import Decoder, Discriminator, Encoder
 from mnist_style.persistence import save_models
 
 
@@ -28,15 +27,34 @@ class AAETestMetrics:
 
 
 @dataclass(slots=True)
+class ModelOptHelper:
+    model: nn.Module
+    opt: optim.Optimizer
+
+    def __init__(self, model: nn.Module, *, lr: float, optim_cls=optim.AdamW):
+        self.model = model
+        self.opt = optim_cls(model.parameters(), lr=lr)
+
+    def __call__(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+
+    def train(self, mode=True):
+        return self.model.train(mode)
+
+    def eval(self):
+        return self.model.eval()
+
+
+LossFunction: TypeAlias = Callable[[Tensor, Tensor], Tensor]
+
+
+@dataclass(slots=True)
 class AAETrainer:
-    encoder: Encoder
-    decoder: Decoder
-    discriminator: Discriminator
-    encoder_opt: optim.Optimizer
-    decoder_opt: optim.Optimizer
-    discriminator_opt: optim.Optimizer
-    autoenc_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
-    advers_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    encoder: ModelOptHelper
+    decoder: ModelOptHelper
+    discriminator: ModelOptHelper
+    autoenc_loss_func: LossFunction
+    advers_loss_func: LossFunction
     latent_norm_scale: float = 2.
 
     def train_one_epoch(self, dataloader: DataLoader, gen_loss_factor=0.1) -> AAETrainMetrics:
@@ -59,9 +77,9 @@ class AAETrainer:
             dis_fake_loss = self.advers_loss_func(fake_output, torch.ones_like(fake_output))
             real_output = self.discriminator(torch.randn_like(latent_code) * self.latent_norm_scale)
             dis_real_loss = self.advers_loss_func(real_output, torch.zeros_like(real_output))
-            self.discriminator_opt.zero_grad()
+            self.discriminator.opt.zero_grad()
             (dis_fake_loss + dis_real_loss).backward()
-            self.discriminator_opt.step()
+            self.discriminator.opt.step()
             cumulative_dis_fake_loss += dis_fake_loss.item() * batch_size
             cumulative_dis_real_loss += dis_real_loss.item() * batch_size
 
@@ -69,11 +87,11 @@ class AAETrainer:
             ae_loss = self.autoenc_loss_func(decoded_batch, batch)
             fake_output = self.discriminator(latent_code)  # recompute without detaching
             gen_loss = self.advers_loss_func(fake_output, torch.zeros_like(fake_output))
-            self.encoder_opt.zero_grad()
-            self.decoder_opt.zero_grad()
+            self.encoder.opt.zero_grad()
+            self.decoder.opt.zero_grad()
             (ae_loss + gen_loss * gen_loss_factor).backward()
-            self.encoder_opt.step()
-            self.decoder_opt.step()
+            self.encoder.opt.step()
+            self.decoder.opt.step()
             cumulative_gen_loss += gen_loss.item() * batch_size
             cumulative_ae_loss += ae_loss.item() * batch_size
 
@@ -115,19 +133,17 @@ class AAETrainer:
 
     def save_models(self, ckpt_dir):
         save_models({
-            "encoder": self.encoder,
-            "decoder": self.decoder,
-            "discriminator": self.discriminator,
+            "encoder": self.encoder.model,
+            "decoder": self.decoder.model,
+            "discriminator": self.discriminator.model,
         }, ckpt_dir)
 
 
 @dataclass(slots=True)
 class SAETrainer:
-    encoder: Encoder
-    decoder: Decoder
-    encoder_opt: optim.Optimizer
-    decoder_opt: optim.Optimizer
-    autoenc_loss_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    encoder: ModelOptHelper
+    decoder: ModelOptHelper
+    autoenc_loss_func: LossFunction
 
     def train_one_epoch(self, dataloader: DataLoader) -> float:
         cumulative_ae_loss = 0.0
@@ -141,12 +157,12 @@ class SAETrainer:
             decoded_batch = self.decoder(latent_code)
 
             # Update encoder/generator and decoder
-            self.encoder_opt.zero_grad()
-            self.decoder_opt.zero_grad()
+            self.encoder.opt.zero_grad()
+            self.decoder.opt.zero_grad()
             ae_loss = self.autoenc_loss_func(decoded_batch, batch)
             ae_loss.backward()
-            self.encoder_opt.step()
-            self.decoder_opt.step()
+            self.encoder.opt.step()
+            self.decoder.opt.step()
             cumulative_ae_loss += ae_loss.item() * batch_size
 
             num_samples += batch_size
@@ -172,8 +188,8 @@ class SAETrainer:
 
     def save_models(self, ckpt_dir):
         save_models({
-            "encoder": self.encoder,
-            "decoder": self.decoder,
+            "encoder": self.encoder.model,
+            "decoder": self.decoder.model,
         }, ckpt_dir)
 
 

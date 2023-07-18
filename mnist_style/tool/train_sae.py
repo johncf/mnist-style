@@ -5,13 +5,13 @@ import logging
 import time
 
 import torch
-from torch import nn, optim
+from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import MNIST
 
 from mnist_style.models import Decoder, Encoder
-from mnist_style.trainer import SAETrainer
+from mnist_style.trainer import ModelOptHelper, SAETrainer
 
 from .common import cli_parser_add_arguments
 
@@ -37,15 +37,12 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=4 * opt.batch_size, shuffle=False)
 
     # Create model instances
-    encoder = Encoder(opt.feat_size)
-    decoder = Decoder(opt.feat_size)
+    encoder = ModelOptHelper(Encoder(opt.feat_size), lr=opt.lr)
+    decoder = ModelOptHelper(Decoder(opt.feat_size), lr=opt.lr)
 
     trainer = SAETrainer(
         encoder=encoder,
         decoder=decoder,
-        # Define optimizers
-        encoder_opt=optim.AdamW(encoder.parameters(), lr=opt.lr),
-        decoder_opt=optim.AdamW(decoder.parameters(), lr=opt.lr),
         # Define loss functions
         autoenc_loss_func=nn.L1Loss(),
     )

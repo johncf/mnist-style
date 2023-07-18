@@ -11,7 +11,7 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 
 from mnist_style.models import Decoder, Encoder
-from mnist_style.trainer import ModelOptHelper, SAETrainer
+from mnist_style.trainer import ModelOptHelper, SimpleTrainer
 
 from .common import cli_parser_add_arguments
 
@@ -40,7 +40,7 @@ def main():
     encoder = ModelOptHelper(Encoder(opt.feat_size), lr=opt.lr)
     decoder = ModelOptHelper(Decoder(opt.feat_size), lr=opt.lr)
 
-    trainer = SAETrainer(
+    trainer = SimpleTrainer(
         encoder=encoder,
         decoder=decoder,
         # Define loss functions
@@ -50,15 +50,15 @@ def main():
     for epoch in range(opt.epochs):
         print(f"Epoch {epoch+1} training:")
         t_start = time.time()
-        mean_ae_loss = trainer.train_one_epoch(train_dataloader)
+        train_metrics = trainer.train_one_epoch(train_dataloader)
         t_end = time.time()
-        print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
+        print(f"  Mean AutoEncoder Loss: {train_metrics.mean_autoenc_loss:.4f}")
         trainer.save_models(opt.ckpt_dir)
         print(f"Epoch {epoch+1} validation:")
         v_start = time.time()
-        mean_ae_loss = trainer.test_one_epoch(test_dataloader)
+        test_metrics = trainer.test_one_epoch(test_dataloader)
         v_end = time.time()
-        print(f"  Mean AutoEncoder Loss: {mean_ae_loss:.4f}")
+        print(f"  Mean AutoEncoder Loss: {test_metrics.mean_autoenc_loss:.4f}")
         print(f"[time] training: {t_end - t_start:.1f}s, validation: {v_end - v_start:.1f}s")
     print("Done!")
 

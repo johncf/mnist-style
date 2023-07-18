@@ -11,7 +11,7 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 
 from mnist_style.models import Decoder, Discriminator, Encoder
-from mnist_style.trainer import ModelOptHelper, AAETrainer
+from mnist_style.trainer import ModelOptHelper, AdversarialTrainer
 
 from .common import cli_parser_add_arguments
 
@@ -41,7 +41,7 @@ def main():
     decoder = ModelOptHelper(Decoder(opt.feat_size), lr=opt.lr)
     discriminator = ModelOptHelper(Discriminator(opt.feat_size), lr=opt.lr)
 
-    trainer = AAETrainer(
+    trainer = AdversarialTrainer(
         encoder=encoder,
         decoder=decoder,
         discriminator=discriminator,

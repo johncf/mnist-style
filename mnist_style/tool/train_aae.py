@@ -11,7 +11,7 @@ from torchvision import transforms
 from torchvision.datasets import MNIST
 
 from mnist_style.models import Decoder, Discriminator, Encoder
-from mnist_style.trainer import ModelOptHelper, AdversarialTrainer
+from mnist_style.trainer import AdversarialTrainer, ModelOptHelper
 
 from .common import cli_parser_add_arguments
 

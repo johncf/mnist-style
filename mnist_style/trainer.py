@@ -1,7 +1,7 @@
 import math
 from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Optional, TypeAlias
+from typing import Callable, TypeAlias
 
 import numpy as np
 import torch

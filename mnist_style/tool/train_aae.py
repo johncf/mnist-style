@@ -50,7 +50,7 @@ def main():
     )
 
     for epoch in range(opt.epochs):
-        gen_loss_factor = 0.1 * max(0, epoch - 1) / max(1, opt.epochs - 2)
+        gen_loss_factor = 0.2 * epoch / max(1, opt.epochs - 2)
         print(f"Epoch {epoch+1} training:", flush=True)
         t_start = time.time()
         train_metrics = trainer.train_one_epoch(train_dataloader, gen_loss_factor)

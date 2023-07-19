@@ -122,7 +122,7 @@ To analyze and visualize various aspects of the latent space of a trained auto-e
 
 ## Results and Discussion
 
-Visualizing the style-feature-space of MNIST test dataset using a model trained using simple autoencoder training strategy (`train-sae` script) gives the following result:
+Visualizing the style-feature-space of MNIST test dataset using an autoencoder model trained with simple training method (`train-sae` script) gives the following result:
 
 ![sae-vis](https://github.com/johncf/mnist-style/assets/21051830/ff2d089b-6869-4a87-b343-942676597ee5)
 
@@ -131,7 +131,7 @@ we get mostly garbage results:
 
 ![sae-gen](https://github.com/johncf/mnist-style/assets/21051830/c23d00b8-2e0a-46f0-8092-d03b230c23fe)
 
-Visualizing the same using a model trained using adversarial autoencoder training strategy (`train-aae` script) gives the following result:
+Visualizing the same using an autoencoder model trained with adversarial training method (`train-aae` script) gives the following result:
 
 ![aae-vis](https://github.com/johncf/mnist-style/assets/21051830/7db1b9fb-b7c3-4e0a-8d0e-f21b895bff53)
 

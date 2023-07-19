@@ -3,10 +3,10 @@
 An [Adversarial Auto-Encoder][aae] (AAE) model that encode style information of
 MNIST images on a Gaussian distributed multivariate.
 
-The model used here is slightly different from the one discussed in section 4
-(Supervised Adversarial Autoencoders) of [the paper][aae]. In the paper, only
-the decoder is provided with a label indicating the digit. Whereas here, we
-also provide the encoder with the label.
+The training method implemented here is a slight variant of what's discussed in
+section 5 (Semi-Supervised Adversarial Autoencoders) of [the paper][aae]. In the
+paper, the encoder generated softmax is trained using another adversarial network.
+In contrast, we simply use cross-entropy loss instead.
 
 [aae]: https://arxiv.org/abs/1511.05644
 
@@ -143,7 +143,7 @@ However, note that some digits are not constructed well even now. This is becaus
 
 ## Future Work
 
-Make the discriminator digit-aware. When training the discriminator:
-- Fake inputs should include all encoder outputs (digit-classification + style encoding).
-- "Real" inputs could include a copy of the digit-classification from the encoder + a prior-distribution random-sampled style encoding.
-- Take care not to backpropagate gradients to the encoder through class-logits.
+Make the discriminator digit-aware (basically using a simpler variant of the idea from section 2.3 of [the paper][aae]).
+When training the discriminator:
+- "Fake" inputs should be the one-hot representation of the label + the Encoder's style encoding output.
+- "Real" inputs should be a random one-hot representation + a prior-distribution random-sampled style vector.

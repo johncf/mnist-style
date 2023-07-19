@@ -38,7 +38,7 @@ def main():
 
     # Create model instances
     autoencoder = ModelOptHelper(ClassifyingAutoEncoder(10, opt.feat_size), lr=opt.lr)
-    discriminator = ModelOptHelper(Discriminator(opt.feat_size), lr=opt.lr)
+    discriminator = ModelOptHelper(Discriminator(10 + opt.feat_size), lr=opt.lr)
 
     trainer = AdversarialTrainer(
         autoencoder=autoencoder,

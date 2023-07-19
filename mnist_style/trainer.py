@@ -137,24 +137,29 @@ class AdversarialTrainer(SimpleTrainer):
         cumulative_dis_fake_loss = 0.0
         cumulative_dis_real_loss = 0.0
         num_samples = 0
+        num_classes = self.autoencoder.model.num_classes
 
         self.autoencoder.train()
         self.discriminator.train()
         for batch, label in dataloader:
             batch_size = batch.shape[0]
-            class_logits, style_code, decoded_batch = self.autoencoder(batch)
+            class_logits, style_feats, decoded_batch = self.autoencoder(batch)
+            label_onehot = nn.functional.one_hot(label, num_classes)
 
-            fake_input = style_code.detach()  # detach from generator's graph
+            # note: detach() below stops backward() from reaching encoder's compute graph
+            fake_input = torch.concat((label_onehot, style_feats.detach()), dim=1)
             fake_output = self.discriminator(fake_input)
             dis_fake_loss = self.advers_loss_func(fake_output, torch.ones_like(fake_output))
-            real_input = torch.randn_like(fake_input) * self.latent_norm_scale
+            dummy_feats = torch.randn_like(style_feats) * self.latent_norm_scale
+            real_input = torch.concat((label_onehot, dummy_feats), dim=1)
             real_output = self.discriminator(real_input)
             dis_real_loss = self.advers_loss_func(real_output, torch.zeros_like(real_output))
             self.discriminator_optimize(dis_fake_loss + dis_real_loss)
 
             ae_loss = self.autoenc_loss_func(decoded_batch, batch)
             classif_loss = self.classif_loss_func(class_logits, label)
-            fake_output = self.discriminator(style_code)  # recompute without detaching
+            fake_input = torch.concat((label_onehot, style_feats), dim=1)  # no detach() here
+            fake_output = self.discriminator(fake_input)
             gen_loss = self.advers_loss_func(fake_output, torch.zeros_like(fake_output))
             self.autoencoder_optimize(ae_loss + classif_loss + gen_loss * gen_loss_factor)
 

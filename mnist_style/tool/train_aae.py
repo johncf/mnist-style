@@ -38,7 +38,7 @@ def main():
 
     # Create model instances
     autoencoder = ModelOptHelper(ClassifyingAutoEncoder(10, opt.feat_size), lr=opt.lr)
-    discriminator = ModelOptHelper(Discriminator(opt.feat_size), lr=opt.lr)
+    discriminator = ModelOptHelper(Discriminator(10 + opt.feat_size), lr=opt.lr)
 
     trainer = AdversarialTrainer(
         autoencoder=autoencoder,
@@ -50,7 +50,7 @@ def main():
     )
 
     for epoch in range(opt.epochs):
-        gen_loss_factor = 0.1 * max(0, epoch - 1) / max(1, opt.epochs - 2)
+        gen_loss_factor = 0.2 * epoch / max(1, opt.epochs - 2)
         print(f"Epoch {epoch+1} training:", flush=True)
         t_start = time.time()
         train_metrics = trainer.train_one_epoch(train_dataloader, gen_loss_factor)

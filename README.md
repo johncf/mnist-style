@@ -6,7 +6,8 @@ MNIST images on a Gaussian distributed multivariate.
 The training method implemented here is a slight variant of what's discussed in
 section 5 (Semi-Supervised Adversarial Autoencoders) of [the paper][aae]. In the
 paper, the encoder generated softmax is trained using another adversarial network.
-In contrast, we simply use cross-entropy loss instead.
+In contrast, we simply use cross-entropy loss instead. We also implement a simpler
+variant of the idea presented in section 2.3.
 
 [aae]: https://arxiv.org/abs/1511.05644
 
@@ -38,6 +39,7 @@ from the same range.
 - [x] Make the Encoder a digit-classifier too!
 - [x] Generate images of digits from a random style-vector (see `vis.ipynb`)
 - [x] Simple CI pipeline
+- [x] Make the discriminator digit-aware (see [#17](https://github.com/johncf/mnist-style/issues/17))
 - [ ] GPU support
 
 ## Setup
@@ -122,28 +124,18 @@ To analyze and visualize various aspects of the latent space of a trained auto-e
 
 ## Results and Discussion
 
-Visualizing the style-feature-space of MNIST test dataset using an autoencoder model trained with simple training method (`train-sae` script) gives the following result:
+Visualizing the style-feature encoding of MNIST test dataset using an encoder model trained with simple autoencoder training method (`train-sae` script) gives the following result:
 
 ![sae-vis](https://github.com/johncf/mnist-style/assets/21051830/ff2d089b-6869-4a87-b343-942676597ee5)
 
-Notice that the distributions are not centered around zero, so if we try to generate images by sampling a random style-vector centered around zero,
-we get mostly garbage results:
+Notice that the distributions are not centered around zero, so if we try to generate images using the decoder model by sampling a random style-vector centered around zero, we get mostly garbage results:
 
 ![sae-gen](https://github.com/johncf/mnist-style/assets/21051830/c23d00b8-2e0a-46f0-8092-d03b230c23fe)
 
-Visualizing the same using an autoencoder model trained with adversarial training method (`train-aae` script) gives the following result:
+Visualizing the same using a model trained with adversarial autoencoder training method (`train-aae` script) gives the following result:
 
-![aae-vis](https://github.com/johncf/mnist-style/assets/21051830/7db1b9fb-b7c3-4e0a-8d0e-f21b895bff53)
+![aae2-vis](https://github.com/johncf/mnist-style/assets/21051830/9347b2de-ba56-4c3a-97ba-0d9f2f90fef1)
 
-Notice that the distributions are now well-centered around zero, and we get much better results from random style-vectors centered around zero:
+Notice that the distributions are now well-centered around zero, and we get much better results from the decoder model using random style-vectors centered around zero:
 
-![aae-gen](https://github.com/johncf/mnist-style/assets/21051830/161a3208-bee2-40f8-a118-19c7f428248c)
-
-However, note that some digits are not constructed well even now. This is because, even though the overall distribution for each feature-component is nicely centered around zero, if we look at it separately for each digit, some of them are still skewed. This is (likely) because the discriminator is digit-agnostic, and thus can't enforce the distribution in a per-digit manner.
-
-## Future Work
-
-Make the discriminator digit-aware (basically using a simpler variant of the idea from section 2.3 of [the paper][aae]).
-When training the discriminator:
-- "Fake" inputs should be the one-hot representation of the label + the Encoder's style encoding output.
-- "Real" inputs should be a random one-hot representation + a prior-distribution random-sampled style vector.
+![aae2-gen](https://github.com/johncf/mnist-style/assets/21051830/e25ab9d7-1840-4eac-bc2f-77c9e0d92521)

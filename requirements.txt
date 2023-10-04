@@ -26,7 +26,7 @@ numpy==1.25.0
     # via
     #   mnist_style (pyproject.toml)
     #   torchvision
-pillow==9.5.0
+pillow==10.0.1
     # via
     #   mnist_style (pyproject.toml)
     #   torchvision
